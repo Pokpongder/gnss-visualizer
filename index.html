@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GNSS Offline Observation Visualizer</title>
+    
+    <!-- Leaflet Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    
+    <!-- Google Fonts: Outfit & Space Grotesk -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Chart.js & PapaParse CDNs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    
+    <!-- Glowing Accent Orbs for Background Aesthetics -->
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+
+    <!-- Application Dashboard Layout -->
+    <div class="app-container">
+        
+        <!-- Glassmorphism Header / Navigation -->
+        <header class="main-header">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i data-lucide="orbit" class="logo-spin"></i>
+                </div>
+                <div class="brand-text">
+                    <h1>GNSS Observation</h1>
+                    <span>Offline Analysis & Visualization</span>
+                </div>
+            </div>
+            
+            <div class="header-actions">
+                <button id="import-btn" class="btn btn-primary" style="display: none;">
+                    <i data-lucide="upload-cloud"></i>
+                    <span>Import CSV</span>
+                </button>
+                <button id="compare-btn" class="btn btn-secondary">
+                    <i data-lucide="git-compare"></i>
+                    <span>Compare Stations</span>
+                </button>
+                <button id="download-sample-btn" class="btn btn-ghost" title="Download Sample CSV Template" style="display: none;">
+                    <i data-lucide="download"></i>
+                    <span>Sample CSV</span>
+                </button>
+                <div class="vertical-divider" style="display: none;"></div>
+                <button id="reset-view-btn" class="btn btn-icon" title="Reset Map View">
+                    <i data-lucide="maximize-2"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content View -->
+        <main class="dashboard-content">
+            <!-- Full Height Leaflet Map Container -->
+            <div id="map-container">
+                <div id="map"></div>
+                
+                <!-- Map Floating Stats Overlay -->
+                <div class="map-floating-overlay">
+                    <div class="overlay-card">
+                        <div class="card-title">Dataset Status</div>
+                        <div class="status-indicator">
+                            <span class="pulse-dot green" id="status-dot"></span>
+                            <span id="dataset-name-display">Active: Simulated Mock Data</span>
+                        </div>
+                        <div class="stats-row">
+                            <div class="stat-item">
+                                <span class="label">Total Stations</span>
+                                <span class="value" id="stat-total-stations">25</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="label">Loaded Stations</span>
+                                <span class="value text-success" id="stat-loaded-stations">3</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="label">Total Epochs</span>
+                                <span class="value" id="stat-total-epochs">86,400</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Slide-in Station Detail Sidebar -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title-block">
+                <span class="station-badge">GNSS STATION</span>
+                <h2 id="sidebar-station-name">KMIT6</h2>
+            </div>
+            <button id="close-sidebar-btn" class="close-btn">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        
+        <div class="sidebar-body">
+            <!-- Coordinates Card -->
+            <div class="sidebar-card coords-card">
+                <div class="coord-item">
+                    <span class="label">Latitude</span>
+                    <span class="value" id="sidebar-lat">13.7278° N</span>
+                </div>
+                <div class="coord-divider"></div>
+                <div class="coord-item">
+                    <span class="label">Longitude</span>
+                    <span class="value" id="sidebar-lon">100.7724° E</span>
+                </div>
+            </div>
+
+            <!-- Scientific Metric Stats Grid -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="icon-title">
+                        <i data-lucide="target" class="text-error"></i>
+                        <span>Avg Horiz Error</span>
+                    </div>
+                    <div class="metric-value"><span id="metric-avg-error">-</span> <small>m</small></div>
+                </div>
+                <div class="metric-card">
+                    <div class="icon-title">
+                        <i data-lucide="zap" class="text-warning"></i>
+                        <span>Max ROTI</span>
+                    </div>
+                    <div class="metric-value"><span id="metric-max-roti">-</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="icon-title">
+                        <i data-lucide="activity" class="text-info"></i>
+                        <span>Avg VTEC</span>
+                    </div>
+                    <div class="metric-value"><span id="metric-avg-vtec">-</span> <small>TECU</small></div>
+                </div>
+            </div>
+
+            <!-- Tabbed Navigation for Sidebar Visualizations -->
+            <div class="tabs-container">
+                <div class="tab-header">
+                    <button class="tab-btn active" data-tab="error-tab">Errors</button>
+                    <button class="tab-btn" data-tab="s4-tab">ROTI</button>
+                    <button class="tab-btn" data-tab="vtec-tab">VTEC</button>
+                </div>
+                
+                <div class="tab-content active" id="error-tab">
+                    <!-- Target Scatter / Bulls-Eye Plot -->
+                    <div class="chart-wrapper scatter-wrapper" data-chart-type="scatter" title="Click card to expand visualization">
+                        <div class="chart-header-row">
+                            <div class="chart-title">ENU Horizontal Error Distribution</div>
+                            <button class="chart-expand-btn" title="Expand Chart"><i data-lucide="maximize-2"></i></button>
+                        </div>
+                        <div class="canvas-container">
+                            <canvas id="scatterErrorChart"></canvas>
+                        </div>
+                        <div class="chart-legend-info">CEP95 radius represents 95% circular error probability.</div>
+                    </div>
+                    <!-- Time-series ENU error Plot -->
+                    <div class="chart-wrapper" data-chart-type="enu-time" title="Click card to expand visualization">
+                        <div class="chart-header-row">
+                            <div class="chart-title">ENU Position Error Over Time</div>
+                            <button class="chart-expand-btn" title="Expand Chart"><i data-lucide="maximize-2"></i></button>
+                        </div>
+                        <div class="canvas-container">
+                            <canvas id="timeseriesErrorChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="s4-tab">
+                    <div class="chart-wrapper" data-chart-type="roti" title="Click card to expand visualization">
+                        <div class="chart-header-row">
+                            <div class="chart-title">Ionospheric Rate of TEC Index (ROTI)</div>
+                            <button class="chart-expand-btn" title="Expand Chart"><i data-lucide="maximize-2"></i></button>
+                        </div>
+                        <div class="canvas-container">
+                            <canvas id="s4Chart"></canvas>
+                        </div>
+                        <div class="chart-info-box warning-box">
+                            <i data-lucide="alert-triangle"></i>
+                            <span>ROTI values above 0.5 TECU/min indicate moderate ionospheric irregularities. Values above 1.0 TECU/min indicate severe irregularities.</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="vtec-tab">
+                    <div class="chart-wrapper" data-chart-type="vtec" title="Click card to expand visualization">
+                        <div class="chart-header-row">
+                            <div class="chart-title">Vertical Total Electron Content (VTEC)</div>
+                            <button class="chart-expand-btn" title="Expand Chart"><i data-lucide="maximize-2"></i></button>
+                        </div>
+                        <div class="canvas-container">
+                            <canvas id="vtecChart"></canvas>
+                        </div>
+                        <div class="chart-info-box info-box">
+                            <i data-lucide="info"></i>
+                            <span>Diurnal variation displays peak values in mid-afternoon due to solar radiation.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CSV Import & Column Mapping Wizard Modal -->
+    <div id="import-modal" class="modal-overlay">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <div class="title-with-icon">
+                    <i data-lucide="file-spreadsheet" class="text-primary"></i>
+                    <h2>Import Offline GNSS CSV</h2>
+                </div>
+                <button class="modal-close-btn" id="close-import-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                
+                <!-- Dropzone Section -->
+                <div id="dropzone" class="dropzone">
+                    <i data-lucide="upload-cloud" class="dropzone-icon"></i>
+                    <p class="primary-text">Drag and drop your CSV file here</p>
+                    <p class="secondary-text">or click to browse local files</p>
+                    <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                </div>
+
+                <!-- Column Mapping Section (Initially Hidden) -->
+                <div id="mapping-wizard" class="mapping-wizard" style="display: none;">
+                    <h3>Configure Column Mapping</h3>
+                    <p class="subtitle">Review parsed headers and map them to standard GNSS parameters.</p>
+                    
+                    <!-- Satellite CSV Mapping Alert Banner -->
+                    <div id="mapping-info-banner" class="chart-info-box info-box" style="display: none; margin-bottom: 16px;">
+                        <i data-lucide="info"></i>
+                        <span id="mapping-info-text">Satellite-by-satellite GNSS data detected. We will automatically average the satellite columns and load VTEC/ROTI values.</span>
+                    </div>
+                    
+                    <div class="mapping-split-container">
+                        <!-- Left Side Form -->
+                        <div class="mapping-form">
+                            <div class="form-row" id="mapping-row-station">
+                                <label for="map-station">Station Code / Name</label>
+                                <select id="map-station" class="form-select"></select>
+                                <span class="help-text">Column identifying the GNSS station (e.g. KMIT6)</span>
+                            </div>
+
+                            <div class="form-row">
+                                <label for="map-time">Timestamp / Epoch</label>
+                                <select id="map-time" class="form-select"></select>
+                                <span class="help-text">Column representing date/time of observation</span>
+                            </div>
+
+                            <div id="mapping-row-coords">
+                                <div class="form-row split-form-row">
+                                    <div>
+                                        <label for="map-lat">Latitude (Optional)</label>
+                                        <select id="map-lat" class="form-select"></select>
+                                    </div>
+                                    <div>
+                                        <label for="map-lon">Longitude (Optional)</label>
+                                        <select id="map-lon" class="form-select"></select>
+                                    </div>
+                                </div>
+                                <span class="help-text" style="margin-top: -8px; display: block; margin-bottom: 12px;">If missing, lookup presets for Thailand stations will be used.</span>
+                            </div>
+
+                            <div id="mapping-row-errors">
+                                <div class="form-row section-divider-title">Positioning Errors (m)</div>
+                                <div class="form-row split-3-form-row">
+                                    <div>
+                                        <label for="map-err-east">East Error (dE)</label>
+                                        <select id="map-err-east" class="form-select"></select>
+                                    </div>
+                                    <div>
+                                        <label for="map-err-north">North Error (dN)</label>
+                                        <select id="map-err-north" class="form-select"></select>
+                                    </div>
+                                    <div>
+                                        <label for="map-err-up">Up Error (dU)</label>
+                                        <select id="map-err-up" class="form-select"></select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="mapping-row-ionosphere">
+                                <div class="form-row section-divider-title">Ionosphere Data</div>
+                                <div class="form-row split-form-row">
+                                    <div>
+                                        <label for="map-s4">S4 Index (Scintillation)</label>
+                                        <select id="map-s4" class="form-select"></select>
+                                    </div>
+                                    <div>
+                                        <label for="map-vtec">VTEC (TECU)</label>
+                                        <select id="map-vtec" class="form-select"></select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Side Data Preview -->
+                        <div class="preview-panel">
+                            <h4>Raw Data Preview</h4>
+                            <div class="table-container">
+                                <table id="preview-table">
+                                    <thead></thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                            <div class="default-station-container" id="default-station-container" style="display: none;">
+                                <label for="default-station-name">Default Station Name</label>
+                                <input type="text" id="default-station-name" placeholder="e.g. STATION1" class="form-input">
+                                <span class="help-text">Used if your CSV has no Station Code column.</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="wizard-actions">
+                        <button class="btn btn-secondary" id="back-to-upload">
+                            <i data-lucide="arrow-left"></i> Change File
+                        </button>
+                        <button class="btn btn-primary" id="confirm-mapping">
+                            <i data-lucide="check"></i> Load Dataset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Station Comparison Wizard Modal -->
+    <div id="compare-modal" class="modal-overlay">
+        <div class="modal-content glass-card compare-modal-content">
+            <div class="modal-header">
+                <div class="title-with-icon">
+                    <i data-lucide="git-compare" class="text-secondary-color"></i>
+                    <h2>Station Comparison Wizard</h2>
+                </div>
+                <button class="modal-close-btn" id="close-compare-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body compare-modal-body">
+                <div class="compare-selectors">
+                    <div class="selector-column">
+                        <label>1. Select Primary Station</label>
+                        <div class="search-box">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="station-a-search" placeholder="Search station...">
+                        </div>
+                        <ul class="station-list" id="station-a-list"></ul>
+                    </div>
+
+                    <div class="selector-column">
+                        <label>2. Select Comparison Station</label>
+                        <div class="search-box">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="station-b-search" placeholder="Search station...">
+                        </div>
+                        <ul class="station-list" id="station-b-list"></ul>
+                    </div>
+
+                    <div class="selector-column config-column">
+                        <label>3. Comparison Metric</label>
+                        <div class="metric-options">
+                            <label class="radio-option">
+                                <input type="radio" name="compare-metric" value="vtec" checked>
+                                <div class="option-card">
+                                    <i data-lucide="activity"></i>
+                                    <span>VTEC</span>
+                                </div>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="compare-metric" value="s4">
+                                <div class="option-card">
+                                    <i data-lucide="zap"></i>
+                                    <span>S4 Index</span>
+                                </div>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="compare-metric" value="error">
+                                <div class="option-card">
+                                    <i data-lucide="target"></i>
+                                    <span>Pos Error (3D RMS)</span>
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <button class="btn btn-primary btn-block" id="start-comparison-btn" disabled>
+                            Generate Comparison
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Comparison Chart Area (Initially Hidden) -->
+                <div class="comparison-chart-section" id="comparison-chart-section" style="display: none;">
+                    <div class="comparison-chart-header">
+                        <h3 id="comparison-chart-title">VTEC Comparison: KMIT6 vs CPN1</h3>
+                        <button class="btn btn-ghost btn-sm" id="close-comparison-chart-btn">
+                            <i data-lucide="arrow-left"></i> Edit Selection
+                        </button>
+                    </div>
+                    <div class="comparison-chart-container">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expanded Chart Modal -->
+    <div id="chart-expanded-modal" class="modal-overlay">
+        <div class="modal-content glass-card expanded-chart-modal-content">
+            <div class="modal-header">
+                <div class="title-with-icon">
+                    <i data-lucide="maximize-2" class="text-primary"></i>
+                    <h2 id="expanded-chart-title">Expanded Visualization</h2>
+                </div>
+                <button class="modal-close-btn" id="close-expanded-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body expanded-chart-modal-body">
+                <div class="expanded-canvas-container">
+                    <canvas id="expandedChartCanvas"></canvas>
+                </div>
+                <div id="expanded-chart-info" class="chart-info-box" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet Map Script -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Application Scripts -->
+    <script src="sample-data.js"></script>
+    <script src="chart-manager.js"></script>
+    <script src="map-manager.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
