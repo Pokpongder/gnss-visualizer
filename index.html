@@ -44,6 +44,18 @@
                 </div>
             </div>
             
+            <div class="header-controls">
+                <div class="control-wrapper">
+                    <i data-lucide="calendar" class="control-icon"></i>
+                    <select id="day-select" class="header-select" title="Change active GNSS observation day">
+                        <option value="121">Day 121 (2026 - Quiet)</option>
+                        <option value="123">Day 123 (2026 - Severe Dist)</option>
+                        <option value="124">Day 124 (2026 - Quiet)</option>
+                        <option value="087">Day 087 (2025 - Earthquake)</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="header-actions">
                 <button id="import-btn" class="btn btn-primary" style="display: none;">
                     <i data-lucide="upload-cloud"></i>
@@ -69,6 +81,12 @@
             <!-- Full Height Leaflet Map Container -->
             <div id="map-container">
                 <div id="map"></div>
+                
+                <!-- Map Loading Overlay -->
+                <div id="map-loading-indicator" class="map-loading-indicator">
+                    <i data-lucide="loader-2" class="logo-spin"></i>
+                    <span>Preloading VTEC & ROTI...</span>
+                </div>
                 
                 <!-- Map Floating Stats Overlay -->
                 <div class="map-floating-overlay">
@@ -128,10 +146,10 @@
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div class="icon-title">
-                        <i data-lucide="target" class="text-error"></i>
-                        <span>Avg Horiz Error</span>
+                        <i data-lucide="arrow-up-down" class="text-error"></i>
+                        <span>Avg Vert Error</span>
                     </div>
-                    <div class="metric-value"><span id="metric-avg-error">-</span> <small>m</small></div>
+                    <div class="metric-value"><span id="metric-avg-vert-error">-</span> <small>m</small></div>
                 </div>
                 <div class="metric-card">
                     <div class="icon-title">
@@ -158,6 +176,14 @@
                 </div>
                 
                 <div class="tab-content active" id="error-tab">
+                    <!-- Positioning Mode Toggle -->
+                    <div class="pos-mode-card">
+                        <div class="pos-mode-title">Positioning Solution Mode</div>
+                        <div class="segmented-control">
+                            <button class="segment-btn active" data-pos-mode="spp" title="Single Point Positioning">SPP</button>
+                            <button class="segment-btn" data-pos-mode="dgnss" id="dgnss-toggle-btn" title="Differential GNSS">DGNSS</button>
+                        </div>
+                    </div>
                     <!-- Target Scatter / Bulls-Eye Plot -->
                     <div class="chart-wrapper scatter-wrapper" data-chart-type="scatter" title="Click card to expand visualization">
                         <div class="chart-header-row">
@@ -213,6 +239,11 @@
                     </div>
                 </div>
             </div>
+        </div>
+        <!-- Sidebar Loading Overlay -->
+        <div id="sidebar-loading-overlay" class="sidebar-loading-overlay">
+            <i data-lucide="loader-2" class="logo-spin loading-icon"></i>
+            <span>Loading station data...</span>
         </div>
     </div>
 

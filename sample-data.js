@@ -38,6 +38,7 @@ const STATIONS_COORDINATES_LOOKUP = PRESET_STATIONS.reduce((acc, current) => {
     acc[current.name.toUpperCase()] = { lat: current.lat, lon: current.lon, code: current.code };
     return acc;
 }, {});
+STATIONS_COORDINATES_LOOKUP["KMI6"] = STATIONS_COORDINATES_LOOKUP["KMIT6"];
 
 /**
  * Generates highly realistic simulated offline GNSS data for testing.

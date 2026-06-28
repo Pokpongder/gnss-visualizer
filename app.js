@@ -11,6 +11,8 @@ const state = {
     activeStation: null,  // Current station analyzed in sidebar
     tempParsedRows: null, // Temporary CSV rows prior to column mapping
     tempHeaders: [],      // Temporary CSV headers
+    activeDay: '121',     // Active observation day DOY ('121', '123', '124', '087')
+    posMode: 'spp',       // Positioning solution mode ('spp', 'dgnss')
     comparison: {
         stationA: null,
         stationB: null,
@@ -119,58 +121,241 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
+// Preloaded GNSS observation dataset configurations (located in /data/ folder)
+const DATASET_CONFIG = {
+    "121": {
+        name: "Day 121 (2026 - Quiet)",
+        folder: "data/121_quiet/",
+        doy: 121,
+        year: 2026,
+        stations: ["CADT", "CHAN", "CHMA", "CM01", "CNBR", "DPT9", "HUEV", "ITC0", "KKU0", "KMIT6", "LPBR", "NKNY", "NKRM", "NKSW", "NUO2", "PJRK", "RUT1", "SISK", "SOKA", "SPBR", "SRTN", "STFD", "UDON", "UTTD"],
+        hasDgnss: true,
+        vtecPattern: (st) => `data/121_quiet/VTEC_${st}_121.csv`,
+        rotiPattern: (st) => `data/121_quiet/ROTI_${st}_121.csv`,
+        posSppPattern: (st) => `data/121_quiet/${st}1210_spp.pos`,
+        posDgnssPattern: (st) => `data/121_quiet/${st}1210_dgnss.pos`
+    },
+    "123": {
+        name: "Day 123 (2026 - Severe Disturbance)",
+        folder: "data/123_severe_dist/",
+        doy: 123,
+        year: 2026,
+        stations: ["CADT", "CHAN", "CHMA", "CM01", "CNBR", "DPT9", "HUEV", "ITC0", "KKU0", "KMIT6", "LPBR", "NKNY", "NKRM", "NKSW", "NUO2", "PJRK", "RUT1", "SISK", "SOKA", "SPBR", "SRTN", "STFD", "UDON", "UTTD"],
+        hasDgnss: true,
+        vtecPattern: (st) => `data/123_severe_dist/VTEC_${st}_123.csv`,
+        rotiPattern: (st) => `data/123_severe_dist/ROTI_${st}_123.csv`,
+        posSppPattern: (st) => `data/123_severe_dist/${st}1230_spp.pos`,
+        posDgnssPattern: (st) => `data/123_severe_dist/${st}1230_dgnss.pos`
+    },
+    "124": {
+        name: "Day 124 (2026 - Quiet)",
+        folder: "data/124_quiet/",
+        doy: 124,
+        year: 2026,
+        stations: ["CADT", "CHAN", "CHMA", "CM01", "CNBR", "DPT9", "HUEV", "ITC0", "KKU0", "KMIT6", "LPBR", "NKNY", "NKRM", "NKSW", "NUO2", "PJRK", "RUT1", "SISK", "SOKA", "SPBR", "SRTN", "STFD", "UDON", "UTTD"],
+        hasDgnss: true,
+        vtecPattern: (st) => `data/124_quiet/VTEC_${st}_124.csv`,
+        rotiPattern: (st) => `data/124_quiet/ROTI_${st}_124.csv`,
+        posSppPattern: (st) => `data/124_quiet/${st}1240_spp.pos`,
+        posDgnssPattern: (st) => `data/124_quiet/${st}1240_dgnss.pos`
+    },
+    "087": {
+        name: "Day 087 (2025 - Earthquake)",
+        folder: "data/087_2025_earthquake/",
+        doy: 87,
+        year: 2025,
+        stations: ["CADT", "CHAN", "CHMA", "CM01", "CNBR", "DPT9", "HUEV", "ITC0", "KMIT6", "LPBR", "NKNY", "NKRM", "NKSW", "NUO2", "PJRK", "SISK", "SOKA", "SPBR", "SRTN", "STFD", "UDON", "UTTD"],
+        hasDgnss: true,
+        vtecPattern: (st) => `data/087_2025_earthquake/VTEC_${st}_ 87.csv`,
+        rotiPattern: (st) => `data/087_2025_earthquake/ROTI_${st}_ 87.csv`,
+        posSppPattern: (st) => `data/087_2025_earthquake/${st}0870_spp.pos`,
+        posDgnssPattern: (st) => `data/087_2025_earthquake/${st}0870_dgnss.pos`
+    }
+};
+
 /**
- * Loads dataset from IndexedDB. If empty, imports mock datasets.
+ * Handles station name aliases (e.g. KMIT6 is named KMI6 in local filenames)
  */
-// Preloaded GNSS observation CSV and POS files (placed in the /data/ directory)
-const PRELOADED_FILES = [
-    "data/VTEC_CADT_121.csv",
-    "data/ROTI_CADT_121.csv",
-    "data/CADT1210_spp.pos"
-];
+function getFileStationName(stationName) {
+    const name = stationName.toUpperCase();
+    if (name === 'KMIT6') return 'KMI6';
+    return name;
+}
+
+/**
+ * Helper to fetch a text file.
+ */
+async function fetchFileText(url) {
+    if (!url) return null;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn(`File not found: ${url} (HTTP ${response.status})`);
+            return null;
+        }
+        return await response.text();
+    } catch (err) {
+        console.error(`Error fetching ${url}:`, err);
+        return null;
+    }
+}
+
+/**
+ * Lazy loads all files for a selected station on-demand.
+ */
+async function loadStationOnDemand(stationName) {
+    const config = DATASET_CONFIG[state.activeDay];
+    if (!config) return;
+
+    const fileStation = getFileStationName(stationName);
+    const vtecUrl = config.vtecPattern(fileStation);
+    const rotiUrl = config.rotiPattern(fileStation);
+    const isDgnssMode = state.posMode === 'dgnss' && config.hasDgnss;
+    const posUrl = isDgnssMode ? config.posDgnssPattern(fileStation) : config.posSppPattern(fileStation);
+
+    console.log(`Loading station ${stationName} on-demand (Day ${state.activeDay}, Mode: ${state.posMode})...`);
+
+    // Fetch texts concurrently
+    const [vtecText, rotiText, posText] = await Promise.all([
+        fetchFileText(vtecUrl),
+        fetchFileText(rotiUrl),
+        fetchFileText(posUrl)
+    ]);
+
+    let successCount = 0;
+
+    // Parse sequentially to avoid database race conditions/overwrite issues
+    if (vtecText) {
+        await parseAndStoreCSVText(vtecUrl.split('/').pop(), vtecText);
+        successCount++;
+    }
+    if (rotiText) {
+        await parseAndStoreCSVText(rotiUrl.split('/').pop(), rotiText);
+        successCount++;
+    }
+    if (posText) {
+        await parseAndStorePOSText(posUrl.split('/').pop(), posText);
+        successCount++;
+        state.loadedPOS[stationName] = state.posMode;
+    }
+
+    if (successCount === 0) {
+        throw new Error(`Failed to load files for station ${stationName}.`);
+    }
+
+    // Refresh UI stats
+    updateDashboardStats();
+}
+
+/**
+ * Toggles the map floating preloading progress bar
+ */
+function showMapLoading(show) {
+    const indicator = document.getElementById('map-loading-indicator');
+    if (show) {
+        indicator.classList.add('active');
+    } else {
+        indicator.classList.remove('active');
+    }
+}
+
+/**
+ * Loads positioning .pos file on-demand for the active mode
+ */
+async function loadStationPOSOnDemand(stationName) {
+    const config = DATASET_CONFIG[state.activeDay];
+    if (!config) return;
+
+    const fileStation = getFileStationName(stationName);
+    const isDgnssMode = state.posMode === 'dgnss' && config.hasDgnss;
+    const posUrl = isDgnssMode ? config.posDgnssPattern(fileStation) : config.posSppPattern(fileStation);
+
+    if (!posUrl) return;
+
+    console.log(`Loading positioning file on-demand for ${stationName}: ${posUrl}`);
+    const posText = await fetchFileText(posUrl);
+    if (!posText) {
+        throw new Error(`Failed to load positioning error file.`);
+    }
+
+    await parseAndStorePOSText(posUrl.split('/').pop(), posText);
+    state.loadedPOS[stationName] = state.posMode;
+}
 
 /**
  * Loads preloaded datasets from the data/ folder.
+ * Preloads VTEC & ROTI for ALL active stations of the selected day.
  */
 async function loadDatasets() {
-    console.log("Initializing preloaded datasets...");
+    console.log(`Initializing datasets for Day: ${state.activeDay}`);
     
     // Always clear IndexedDB and start fresh to load from the /data/ folder
     await clearAllDBData();
     state.loadedData = {};
+    state.loadedPOS = {};
 
-    for (const url of PRELOADED_FILES) {
-        try {
-            console.log(`Preloading GNSS file: ${url}`);
-            const response = await fetch(url);
-            if (!response.ok) {
-                console.warn(`Could not preload ${url}: HTTP status ${response.status}`);
-                continue;
-            }
-            const fileText = await response.text();
-            const fileName = url.split('/').pop();
-            
-            // Branch based on file extension
-            if (fileName.toLowerCase().endsWith('.pos')) {
-                await parseAndStorePOSText(fileName, fileText);
-            } else {
-                await parseAndStoreCSVText(fileName, fileText);
-            }
-        } catch (err) {
-            console.error(`Error loading preloaded dataset ${url}:`, err);
+    // Refresh UI states
+    updateDashboardStats();
+    updatePosModeToggleState();
+
+    const config = DATASET_CONFIG[state.activeDay];
+    
+    // Show map preloading bar
+    showMapLoading(true);
+
+    // Build URL queue and fetch texts in parallel
+    const fetchPromises = [];
+    const stationOrder = [];
+
+    config.stations.forEach(station => {
+        const fileStation = getFileStationName(station);
+        const vtecUrl = config.vtecPattern(fileStation);
+        const rotiUrl = config.rotiPattern(fileStation);
+
+        stationOrder.push({ type: 'vtec', fileName: vtecUrl.split('/').pop() });
+        fetchPromises.push(fetchFileText(vtecUrl));
+
+        stationOrder.push({ type: 'roti', fileName: rotiUrl.split('/').pop() });
+        fetchPromises.push(fetchFileText(rotiUrl));
+    });
+
+    const results = await Promise.all(fetchPromises);
+    showMapLoading(false);
+
+    // Parse and store sequentially to prevent write conflict race conditions
+    for (let i = 0; i < results.length; i++) {
+        const text = results[i];
+        if (text) {
+            await parseAndStoreCSVText(stationOrder[i].fileName, text);
         }
     }
 
-    // Refresh GUI states
+    // Update active stations markers on the map
+    updateMapMarkers(config.stations);
     updateDashboardStats();
-    updateMapMarkers(Object.keys(state.loadedData));
+
+    // Retain currently active station if it exists in the new day's dataset
+    const prevStation = state.activeStation;
+    const keepSelected = prevStation && config.stations.includes(prevStation.toUpperCase());
+
+    if (keepSelected) {
+        try {
+            await window.handleStationSelect(prevStation);
+        } catch (err) {
+            console.error(`Failed to reload active station ${prevStation}:`, err);
+        }
+    } else {
+        state.activeStation = null;
+        closeSidebar();
+    }
 }
 
 /**
  * Recalculate stats shown on map floating card overlays
  */
 function updateDashboardStats() {
-    const totalStations = PRESET_STATIONS.length;
+    const config = DATASET_CONFIG[state.activeDay];
+    const totalStations = config ? config.stations.length : PRESET_STATIONS.length;
     const loadedStations = Object.keys(state.loadedData).length;
     
     let totalEpochs = 0;
@@ -182,8 +367,9 @@ function updateDashboardStats() {
     document.getElementById('stat-loaded-stations').textContent = loadedStations;
     document.getElementById('stat-total-epochs').textContent = totalEpochs.toLocaleString();
 
-    // Update status labels
-    document.getElementById('dataset-name-display').textContent = "Active: Preloaded Datasets (/data/)";
+    // Update status labels to show selected day
+    const dayName = config ? config.name : "Preloaded Datasets";
+    document.getElementById('dataset-name-display').textContent = `Active: ${dayName}`;
     
     const dot = document.getElementById('status-dot');
     if (loadedStations > 0) {
@@ -319,6 +505,42 @@ function registerDOMEvents() {
         };
     });
 
+    // Day Selection Change Event
+    document.getElementById('day-select').onchange = async (e) => {
+        state.activeDay = e.target.value;
+        await loadDatasets();
+    };
+
+    // Positioning Mode Toggle Events (SPP vs DGNSS)
+    document.querySelectorAll('[data-pos-mode]').forEach(btn => {
+        btn.onclick = async () => {
+            const mode = btn.dataset.posMode;
+            if (mode === state.posMode) return;
+
+            // Toggle active styles
+            document.querySelectorAll('[data-pos-mode]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            state.posMode = mode;
+
+            // If we have an active station, reload it in the new mode and update charts!
+            if (state.activeStation) {
+                try {
+                    showSidebarLoading(true);
+                    await loadStationOnDemand(state.activeStation);
+                    showSidebarLoading(false);
+                    
+                    // Refresh charts
+                    const stationData = state.loadedData[state.activeStation];
+                    updateStationCharts(state.activeStation, stationData);
+                } catch (err) {
+                    showSidebarLoading(false);
+                    alert(`Error switching positioning mode: ${err.message}`);
+                }
+            }
+        };
+    });
+
     // Close Modal overlays clicking outside content
     window.onclick = (event) => {
         if (event.target === importModal) importModal.classList.remove('open');
@@ -333,50 +555,111 @@ function registerDOMEvents() {
     };
 }
 
+/**
+ * Toggles the loading overlay in the station detail sidebar
+ */
+function showSidebarLoading(show) {
+    const overlay = document.getElementById('sidebar-loading-overlay');
+    if (show) {
+        overlay.classList.add('active');
+    } else {
+        overlay.classList.remove('active');
+    }
+}
+
+/**
+ * Updates the DGNSS toggle state based on availability in active day configuration
+ */
+function updatePosModeToggleState() {
+    const config = DATASET_CONFIG[state.activeDay];
+    const dgnssBtn = document.getElementById('dgnss-toggle-btn');
+    if (config && config.hasDgnss) {
+        dgnssBtn.disabled = false;
+        dgnssBtn.title = "Differential positioning solution (DGNSS)";
+    } else {
+        dgnssBtn.disabled = true;
+        dgnssBtn.title = "DGNSS data not available for this day";
+        // If mode was DGNSS, switch to SPP
+        if (state.posMode === 'dgnss') {
+            state.posMode = 'spp';
+            document.querySelectorAll('[data-pos-mode]').forEach(btn => {
+                if (btn.dataset.posMode === 'spp') btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+        }
+    }
+}
+
 /* ==========================================================================
    4. Station Selection & Sidebar Display
    ========================================================================== */
-window.handleStationSelect = function(stationName) {
+window.handleStationSelect = async function(stationName) {
     const formattedName = stationName.toUpperCase();
-    const stationData = state.loadedData[formattedName];
     
-    // Open Map Popup / Focus
+    // Focus marker on the map and open its popup
     focusOnStation(formattedName);
 
-    if (!stationData || stationData.length === 0) {
-        alert(`No data loaded for station ${formattedName}. Import a CSV containing data for this station first.`);
-        return;
-    }
-
     state.activeStation = formattedName;
-    
-    // Set Header
+
+    // Set Sidebar title and open it instantly
     document.getElementById('sidebar-station-name').textContent = formattedName;
-    
+    document.getElementById('sidebar').classList.add('open');
+
+    // Populate Sidebar UI instantly using preloaded VTEC/ROTI data
+    const preloadedData = state.loadedData[formattedName] || [];
+    populateSidebarUI(formattedName, preloadedData);
+    updateStationCharts(formattedName, preloadedData);
+
+    // If positioning errors (.pos file) are not loaded yet for the active mode, fetch them on-demand
+    if (state.loadedPOS[formattedName] !== state.posMode) {
+        showSidebarLoading(true);
+        try {
+            await loadStationPOSOnDemand(formattedName);
+            showSidebarLoading(false);
+            
+            // Re-populate and re-render now that the positioning errors are loaded
+            const mergedData = state.loadedData[formattedName] || [];
+            populateSidebarUI(formattedName, mergedData);
+            updateStationCharts(formattedName, mergedData);
+        } catch (err) {
+            showSidebarLoading(false);
+            console.error(`Failed to load positioning errors for station ${formattedName}:`, err);
+        }
+    }
+};
+
+/**
+ * Populates sidebar geodetic coordinates and calculated scientific metrics
+ */
+function populateSidebarUI(stationName, stationData) {
     // Set Presets coordinates
-    const lookup = STATIONS_COORDINATES_LOOKUP[formattedName];
+    const lookup = STATIONS_COORDINATES_LOOKUP[stationName];
     if (lookup) {
         document.getElementById('sidebar-lat').textContent = `${lookup.lat.toFixed(4)}° N`;
         document.getElementById('sidebar-lon').textContent = `${lookup.lon.toFixed(4)}° E`;
-    } else {
+    } else if (stationData && stationData.length > 0) {
         // Fallback to coordinates found in first data row
         const fallbackLat = stationData[0].latitude;
         const fallbackLon = stationData[0].longitude;
         document.getElementById('sidebar-lat').textContent = fallbackLat ? `${fallbackLat.toFixed(4)}°` : 'N/A';
         document.getElementById('sidebar-lon').textContent = fallbackLon ? `${fallbackLon.toFixed(4)}°` : 'N/A';
+    } else {
+        document.getElementById('sidebar-lat').textContent = 'N/A';
+        document.getElementById('sidebar-lon').textContent = 'N/A';
     }
 
-    // Calculate metrics: Horizontal error mean, Max S4, Mean VTEC
-    let sumHorizError = 0;
+    // Calculate metrics: Vertical error mean, Max S4 (ROTI), Mean VTEC
+    let sumVertError = 0;
     let maxS4 = 0;
     let sumVTEC = 0;
-    let validHorizCount = 0;
+    let validVertCount = 0;
     let validVtecCount = 0;
 
     stationData.forEach(d => {
-        if (d.error_east !== undefined && d.error_north !== undefined) {
-            sumHorizError += Math.sqrt(d.error_east ** 2 + d.error_north ** 2);
-            validHorizCount++;
+        // Check if positioning errors are loaded (are not 0)
+        if (d.error_up !== 0) {
+            sumVertError += Math.abs(d.error_up);
+            validVertCount++;
         }
         if (d.s4_index !== undefined) {
             if (d.s4_index > maxS4) maxS4 = d.s4_index;
@@ -387,19 +670,13 @@ window.handleStationSelect = function(stationName) {
         }
     });
 
-    const avgHorizError = validHorizCount > 0 ? (sumHorizError / validHorizCount).toFixed(3) : '-';
+    const avgVertError = validVertCount > 0 ? (sumVertError / validVertCount).toFixed(3) : '-';
     const avgVtec = validVtecCount > 0 ? (sumVTEC / validVtecCount).toFixed(1) : '-';
 
-    document.getElementById('metric-avg-error').textContent = avgHorizError;
+    document.getElementById('metric-avg-vert-error').textContent = avgVertError;
     document.getElementById('metric-max-roti').textContent = maxS4.toFixed(3);
     document.getElementById('metric-avg-vtec').textContent = avgVtec;
-
-    // Render Charts
-    updateStationCharts(formattedName, stationData);
-
-    // Open Sidebar
-    document.getElementById('sidebar').classList.add('open');
-};
+}
 
 function closeSidebar() {
     document.getElementById('sidebar').classList.remove('open');
@@ -495,12 +772,13 @@ function displayColumnMapperWizard() {
         let dataType = 'VTEC';
 
         const cleanFilename = state.tempFileName.split(/[\\/]/).pop(); // Get basename
-        const filenameMatch = cleanFilename.match(/^(ROTI|VTEC)_([A-Za-z0-9]+)_(\d{3})\.csv$/i);
+        const filenameMatch = cleanFilename.match(/^(ROTI|VTEC)_([A-Za-z0-9]+)_(\s?\d+|\d{3})\.csv$/i);
 
         if (filenameMatch) {
             dataType = filenameMatch[1].toUpperCase();
             detectedStation = filenameMatch[2].toUpperCase();
-            detectedDoy = filenameMatch[3];
+            if (detectedStation === 'KMI6') detectedStation = 'KMIT6'; // Map KMI6 -> KMIT6
+            detectedDoy = filenameMatch[3].trim();
         } else {
             // Fuzzy search station in filename
             const foundPreset = PRESET_STATIONS.find(s => cleanFilename.toUpperCase().includes(s.name.toUpperCase()));
@@ -750,12 +1028,13 @@ async function parseAndStoreCSVText(fileName, csvText, customMappings = null) {
         let isVtec = true;
 
         const cleanFilename = fileName.split(/[\\/]/).pop();
-        const filenameMatch = cleanFilename.match(/^(ROTI|VTEC)_([A-Za-z0-9]+)_(\d{3})\.csv$/i);
+        const filenameMatch = cleanFilename.match(/^(ROTI|VTEC)_([A-Za-z0-9]+)_(\s?\d+|\d{3})\.csv$/i);
 
         if (filenameMatch) {
             isVtec = filenameMatch[1].toUpperCase() === 'VTEC';
             detectedStation = filenameMatch[2].toUpperCase();
-            detectedDoy = parseInt(filenameMatch[3]);
+            if (detectedStation === 'KMI6') detectedStation = 'KMIT6'; // Map KMI6 -> KMIT6
+            detectedDoy = parseInt(filenameMatch[3].trim());
         } else {
             if (cleanFilename.toUpperCase().includes('ROTI')) isVtec = false;
             const doyMatch = cleanFilename.match(/_(\d{3})\b|\b(\d{3})\b/);
@@ -780,8 +1059,9 @@ async function parseAndStoreCSVText(fileName, csvText, customMappings = null) {
             const epochSecs = parseInt(row[colTime]);
             if (isNaN(epochSecs)) return; // Skip invalid rows
 
-            // Convert epoch seconds to date string (using DOY & year 2026)
-            const date = new Date(2026, 0, 1);
+            // Convert epoch seconds to date string (using DOY & active year)
+            const activeYear = DATASET_CONFIG[state.activeDay] ? DATASET_CONFIG[state.activeDay].year : 2026;
+            const date = new Date(activeYear, 0, 1);
             date.setDate(detectedDoy);
             date.setSeconds(epochSecs - 1); // Align epoch 1 to 00:00:00
 
@@ -956,8 +1236,9 @@ function openComparisonWizard() {
     document.getElementById('start-comparison-btn').disabled = true;
     document.getElementById('comparison-chart-section').style.display = 'none';
 
-    // Populate Lists of Stations
-    const stationsList = Object.keys(state.loadedData);
+    // Populate Lists of Stations based on active day config
+    const config = DATASET_CONFIG[state.activeDay];
+    const stationsList = config ? config.stations : [];
 
     const renderList = (elementId, searchVal = '', selectedStation = null) => {
         const ul = document.getElementById(elementId);
@@ -1035,10 +1316,32 @@ function openComparisonWizard() {
         };
     });
 
-    // Start Comparison Button Action
-    document.getElementById('start-comparison-btn').onclick = () => {
-        triggerComparisonChartDrawing();
-        document.getElementById('comparison-chart-section').style.display = 'block';
+    // Start Comparison Button Action (with on-demand lazy loading)
+    document.getElementById('start-comparison-btn').onclick = async () => {
+        const compareBtn = document.getElementById('start-comparison-btn');
+        const originalText = compareBtn.textContent;
+        compareBtn.disabled = true;
+        compareBtn.innerHTML = `<i data-lucide="loader-2" class="logo-spin"></i> Loading...`;
+        lucide.createIcons();
+
+        try {
+            // Lazy load station A if not loaded
+            if (!state.loadedData[state.comparison.stationA]) {
+                await loadStationOnDemand(state.comparison.stationA);
+            }
+            // Lazy load station B if not loaded
+            if (!state.loadedData[state.comparison.stationB]) {
+                await loadStationOnDemand(state.comparison.stationB);
+            }
+
+            triggerComparisonChartDrawing();
+            document.getElementById('comparison-chart-section').style.display = 'block';
+        } catch (err) {
+            alert(`Failed to load comparison data: ${err.message}`);
+        } finally {
+            compareBtn.disabled = false;
+            compareBtn.textContent = originalText;
+        }
     };
 
     // Close Comparison Chart Panel back to configuration selection
@@ -1079,14 +1382,19 @@ async function parseAndStorePOSText(fileName, posText) {
     let stationName = 'CADT';
     const cleanFilename = fileName.split(/[\\/]/).pop().toUpperCase();
     
-    // Look up in preset stations list (PRESET_STATIONS is defined in sample-data.js)
-    const foundPreset = PRESET_STATIONS.find(s => cleanFilename.startsWith(s.name.toUpperCase()));
-    if (foundPreset) {
-        stationName = foundPreset.name;
+    // Check for KMI6 alias to KMIT6
+    if (cleanFilename.startsWith('KMI6')) {
+        stationName = 'KMIT6';
     } else {
-        const stationMatch = cleanFilename.match(/^([A-Za-z0-9]+)\d+/);
-        if (stationMatch) {
-            stationName = stationMatch[1].toUpperCase();
+        // Look up in preset stations list (PRESET_STATIONS is defined in sample-data.js)
+        const foundPreset = PRESET_STATIONS.find(s => cleanFilename.startsWith(s.name.toUpperCase()));
+        if (foundPreset) {
+            stationName = foundPreset.name;
+        } else {
+            const stationMatch = cleanFilename.match(/^([A-Za-z0-9]+)\d+/);
+            if (stationMatch) {
+                stationName = stationMatch[1].toUpperCase();
+            }
         }
     }
 

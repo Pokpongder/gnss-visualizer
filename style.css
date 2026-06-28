@@ -1172,3 +1172,176 @@ body {
     border-radius: 8px;
     padding: 16px;
 }
+
+/* --- Header Controls (Day Selector) --- */
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.control-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 6px 12px;
+    transition: all 0.2s;
+}
+
+.control-wrapper:hover {
+    border-color: var(--border-hover);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.control-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--primary-color);
+}
+
+.header-select {
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-family: var(--font-heading);
+    font-size: 0.88rem;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+    padding-right: 8px;
+}
+
+.header-select option {
+    background-color: var(--bg-darker);
+    color: var(--text-main);
+}
+
+/* --- Segmented Control for Positioning Mode (SPP / DGNSS) --- */
+.pos-mode-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.pos-mode-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.segmented-control {
+    display: flex;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 2px;
+    width: 100%;
+}
+
+.segment-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.segment-btn:hover:not(:disabled) {
+    color: var(--text-main);
+}
+
+.segment-btn.active {
+    background-color: var(--primary-color);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.segment-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/* --- Sidebar Loading Overlay --- */
+.sidebar-loading-overlay {
+    position: absolute;
+    top: 70px; /* Below sidebar header */
+    left: 0;
+    width: 100%;
+    height: calc(100% - 70px);
+    background: rgba(14, 22, 38, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 1010;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+.sidebar-loading-overlay.active {
+    display: flex;
+}
+
+.sidebar-loading-overlay .loading-icon {
+    width: 36px;
+    height: 36px;
+    color: var(--primary-color);
+}
+
+.sidebar-loading-overlay span {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* --- Map Loading Overlay --- */
+.map-loading-indicator {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: rgba(14, 22, 38, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 16px;
+    display: none; /* Hidden by default */
+    align-items: center;
+    gap: 10px;
+    color: var(--text-main);
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: var(--shadow-premium);
+}
+
+.map-loading-indicator.active {
+    display: flex;
+}
+
+.map-loading-indicator i {
+    width: 16px;
+    height: 16px;
+    color: var(--primary-color);
+}
