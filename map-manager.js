@@ -6,10 +6,39 @@
 
 // Global leaflet map instance and marker registry
 let leafletMap = null;
+let activeTileLayer = null;
 const mapMarkers = {};
+let ippLayerGroup = null;
 
 /**
- * Initializes the Leaflet map with dark theme tiles.
+ * Sets the map tile layer to match the active theme.
+ * @param {string} theme - 'dark' or 'light'
+ */
+function setMapTheme(theme) {
+    if (!leafletMap) return;
+
+    if (activeTileLayer) {
+        leafletMap.removeLayer(activeTileLayer);
+    }
+
+    const maxBounds = [[-20, 60], [45, 140]];
+    const tileUrl = theme === 'light' 
+        ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+    activeTileLayer = L.tileLayer(tileUrl, {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20,
+        noWrap: true,
+        bounds: maxBounds
+    });
+
+    activeTileLayer.addTo(leafletMap);
+}
+
+/**
+ * Initializes the Leaflet map with theme-appropriate tiles.
  */
 function initMap() {
     const defaultCenter = [13.0, 101.5]; // Thailand centered
@@ -27,14 +56,12 @@ function initMap() {
     // Zoom buttons positioned bottom right
     L.control.zoom({ position: 'bottomright' }).addTo(leafletMap);
 
-    // CartoDB Dark Matter tile layer (Premium Dark Mode)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 20,
-        noWrap: true,
-        bounds: maxBounds
-    }).addTo(leafletMap);
+    // Initialize tile layer based on active theme
+    const initialTheme = (window.state && window.state.theme) || 'dark';
+    setMapTheme(initialTheme);
+
+    // Initialize layer group for IPPs
+    ippLayerGroup = L.layerGroup().addTo(leafletMap);
 
     // Reset view button bind
     document.getElementById('reset-view-btn').onclick = () => {
@@ -97,8 +124,8 @@ function renderPresetMarkers() {
         // Popup Content
         const popupContent = `
             <div style="font-family: 'Outfit', sans-serif; padding: 4px;">
-                <h4 style="margin: 0 0 4px 0; font-size: 1.1rem; color: #fff;">${station.name}</h4>
-                <p style="margin: 0 0 8px 0; font-size: 0.8rem; color: #9ca3af;">
+                <h4 style="margin: 0 0 4px 0; font-size: 1.1rem; color: var(--text-main);">${station.name}</h4>
+                <p style="margin: 0 0 8px 0; font-size: 0.8rem; color: var(--text-muted);">
                     Org: ${station.code}<br>
                     Lat: ${station.lat.toFixed(4)}°<br>
                     Lon: ${station.lon.toFixed(4)}°
@@ -153,3 +180,75 @@ function focusOnStation(stationName) {
     leafletMap.setView(latlng, 8, { animate: true, duration: 1.0 });
     marker.openPopup();
 }
+
+/**
+ * Renders Ionospheric Pierce Points (IPPs) and connection lines on the map.
+ * @param {Array<Object>} ippPoints - Array of IPP objects: { st, sat, lat, lon, v }
+ * @param {string} constellationFilter - 'all', 'GPS', or 'BDS'
+ * @param {boolean} showLines - If true, draws connection lines
+ */
+function renderIPPData(ippPoints, constellationFilter = 'all', showLines = true) {
+    if (!ippLayerGroup) return;
+    ippLayerGroup.clearLayers();
+
+    if (!ippPoints || ippPoints.length === 0) return;
+
+    ippPoints.forEach(pt => {
+        // Filter by constellation
+        if (constellationFilter === 'GPS' && !pt.sat.startsWith('G')) return;
+        if (constellationFilter === 'BDS' && !pt.sat.startsWith('C')) return;
+
+        // VTEC values color mapping (low: green, medium: yellow, high: red, extreme: pink/magenta)
+        let color = '#3b82f6'; // Default blue
+        let val = pt.v;
+        if (val < 10) {
+            color = '#10b981'; // Green
+        } else if (val < 25) {
+            color = '#f59e0b'; // Yellow/Orange
+        } else if (val < 45) {
+            color = '#ef4444'; // Red
+        } else {
+            color = '#ec4899'; // Pink/Magenta
+        }
+
+        // Draw Circle at IPP
+        const circle = L.circleMarker([pt.lat, pt.lon], {
+            radius: 5,
+            fillColor: color,
+            color: '#ffffff',
+            weight: 1,
+            opacity: 0.8,
+            fillOpacity: 0.9
+        });
+
+        // Tooltip detail
+        const tooltipContent = `
+            <div style="font-family: 'Outfit', sans-serif; font-size: 0.8rem; line-height: 1.3;">
+                <strong>Sat:</strong> ${pt.sat}<br>
+                <strong>VTEC:</strong> ${pt.v.toFixed(2)} TECU<br>
+                <strong>IPP:</strong> ${pt.lat.toFixed(2)}°, ${pt.lon.toFixed(2)}°<br>
+                <strong>Station:</strong> ${pt.st}
+            </div>
+        `;
+        circle.bindTooltip(tooltipContent, { direction: 'top', className: 'ipp-tooltip' });
+
+        // Add to group
+        ippLayerGroup.addLayer(circle);
+
+        // Draw connection line to originating station if enabled
+        if (showLines) {
+            const stationName = pt.st.toUpperCase();
+            const stationInfo = STATIONS_COORDINATES_LOOKUP[stationName];
+            if (stationInfo) {
+                const line = L.polyline([[stationInfo.lat, stationInfo.lon], [pt.lat, pt.lon]], {
+                    color: color,
+                    weight: 1,
+                    dashArray: '3, 4',
+                    opacity: 0.45
+                });
+                ippLayerGroup.addLayer(line);
+            }
+        }
+    });
+}
+

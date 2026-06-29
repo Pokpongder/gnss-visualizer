@@ -13,11 +13,11 @@ const state = {
     tempHeaders: [],      // Temporary CSV headers
     activeDay: '121',     // Active observation day DOY ('121', '123', '124', '087')
     posMode: 'spp',       // Positioning solution mode ('spp', 'dgnss')
-    comparison: {
-        stationA: null,
-        stationB: null,
-        metric: 'vtec'
-    }
+    theme: 'dark',        // Current active UI theme ('dark', 'light')
+    ippData: null,        // Loaded day's IPP data
+    ippLayerEnabled: false,
+    ippShowLines: true,
+    ippConstellation: 'all'
 };
 
 // Auto-detection Regex Rules for CSV Headers
@@ -102,6 +102,25 @@ function clearAllDBData() {
    2. App Initialization & Lifecycles
    ========================================================================== */
 window.addEventListener("DOMContentLoaded", async () => {
+    // Initialize Theme immediately to prevent flash
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    state.theme = savedTheme;
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
+    // Set initial theme toggle icon before loading Lucide icons
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    if (themeToggleBtn) {
+        const icon = themeToggleBtn.querySelector('i');
+        if (icon) {
+            icon.setAttribute('data-lucide', savedTheme === 'dark' ? 'sun' : 'moon');
+        }
+    }
+
+    // Set initial chart defaults
+    if (typeof setChartTheme === 'function') {
+        setChartTheme(savedTheme);
+    }
+
     // 1. Load icons
     lucide.createIcons();
 
@@ -348,6 +367,9 @@ async function loadDatasets() {
         state.activeStation = null;
         closeSidebar();
     }
+
+    // Load IPP data for the new day
+    await loadIPPDataset();
 }
 
 /**
@@ -387,14 +409,11 @@ function updateDashboardStats() {
 function registerDOMEvents() {
     // Dropdown / Modal Controls
     const importBtn = document.getElementById('import-btn');
-    const compareBtn = document.getElementById('compare-btn');
     const downloadSampleBtn = document.getElementById('download-sample-btn');
     
     const importModal = document.getElementById('import-modal');
-    const compareModal = document.getElementById('compare-modal');
     
     const closeImportBtn = document.getElementById('close-import-modal');
-    const closeCompareBtn = document.getElementById('close-compare-modal');
 
     // Sidebar Close
     document.getElementById('close-sidebar-btn').onclick = closeSidebar;
@@ -408,14 +427,14 @@ function registerDOMEvents() {
         importModal.classList.add('open');
     };
     closeImportBtn.onclick = () => importModal.classList.remove('open');
-
-    compareBtn.onclick = () => {
-        openComparisonWizard();
-        compareModal.classList.add('open');
-    };
-    closeCompareBtn.onclick = () => compareModal.classList.remove('open');
     
     downloadSampleBtn.onclick = downloadSampleCSV;
+
+    // Theme Toggle Binding
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    if (themeToggleBtn) {
+        themeToggleBtn.onclick = () => toggleTheme();
+    }
 
     // CSV File Select Bindings
     const dropzone = document.getElementById('dropzone');
@@ -544,7 +563,6 @@ function registerDOMEvents() {
     // Close Modal overlays clicking outside content
     window.onclick = (event) => {
         if (event.target === importModal) importModal.classList.remove('open');
-        if (event.target === compareModal) compareModal.classList.remove('open');
         if (event.target === expandedModal) {
             expandedModal.classList.remove('open');
             if (activeCharts.expanded) {
@@ -553,6 +571,71 @@ function registerDOMEvents() {
             }
         }
     };
+
+    // IPP Layer Toggles & Filters
+    const ippLayerToggle = document.getElementById('ipp-layer-toggle');
+    const ippControlsGroup = document.getElementById('ipp-controls-group');
+    const ippConstellationSelect = document.getElementById('ipp-constellation-select');
+    const ippLinesToggle = document.getElementById('ipp-lines-toggle');
+
+    const timelineContainer = document.getElementById('timeline-container');
+    const timelineSlider = document.getElementById('timeline-slider');
+    const playBtn = document.getElementById('timeline-play-btn');
+
+    // Toggle IPP Layer visibility
+    if (ippLayerToggle) {
+        ippLayerToggle.onchange = async (e) => {
+            state.ippLayerEnabled = e.target.checked;
+            if (state.ippLayerEnabled) {
+                ippControlsGroup.style.display = 'block';
+                if (!state.ippData) {
+                    showMapLoading(true);
+                    await loadIPPDataset();
+                    showMapLoading(false);
+                } else {
+                    timelineContainer.style.display = 'block';
+                    updateIPPMapVisualization();
+                }
+            } else {
+                ippControlsGroup.style.display = 'none';
+                timelineContainer.style.display = 'none';
+                if (isPlaying) {
+                    togglePlayback();
+                }
+                updateIPPMapVisualization();
+            }
+        };
+    }
+
+    // Toggle connection lines
+    if (ippLinesToggle) {
+        ippLinesToggle.onchange = (e) => {
+            state.ippShowLines = e.target.checked;
+            updateIPPMapVisualization();
+        };
+    }
+
+    // Constellation Filter Select
+    if (ippConstellationSelect) {
+        ippConstellationSelect.onchange = (e) => {
+            state.ippConstellation = e.target.value;
+            updateIPPMapVisualization();
+        };
+    }
+
+    // Timeline Slider Change
+    if (timelineSlider) {
+        timelineSlider.oninput = () => {
+            updateIPPMapVisualization();
+        };
+    }
+
+    // Timeline Play/Pause Button
+    if (playBtn) {
+        playBtn.onclick = () => {
+            togglePlayback();
+        };
+    }
 }
 
 /**
@@ -1226,148 +1309,7 @@ function formatDate(date) {
 }
 
 /* ==========================================================================
-   6. Station Comparison Wizard
-   ========================================================================== */
-function openComparisonWizard() {
-    // Reset comparison states
-    state.comparison.stationA = null;
-    state.comparison.stationB = null;
-    
-    document.getElementById('start-comparison-btn').disabled = true;
-    document.getElementById('comparison-chart-section').style.display = 'none';
 
-    // Populate Lists of Stations based on active day config
-    const config = DATASET_CONFIG[state.activeDay];
-    const stationsList = config ? config.stations : [];
-
-    const renderList = (elementId, searchVal = '', selectedStation = null) => {
-        const ul = document.getElementById(elementId);
-        ul.innerHTML = '';
-
-        const filtered = stationsList.filter(s => s.toLowerCase().includes(searchVal.toLowerCase()));
-
-        if (filtered.length === 0) {
-            ul.innerHTML = `<li class="station-item" style="color:var(--text-dim); text-align:center; cursor:default;">No active stations</li>`;
-            return;
-        }
-
-        filtered.forEach(station => {
-            const presetInfo = STATIONS_COORDINATES_LOOKUP[station] || { code: 'Custom' };
-            const isSelected = selectedStation === station;
-            
-            const li = document.createElement('li');
-            li.className = `station-item ${isSelected ? 'selected' : ''}`;
-            li.innerHTML = `
-                <span class="station-code">${station}</span>
-                <span class="station-group">${presetInfo.code}</span>
-            `;
-            
-            li.onclick = () => {
-                if (elementId === 'station-a-list') {
-                    state.comparison.stationA = station;
-                    renderList('station-a-list', searchVal, station);
-                    // Re-render B list to prevent comparing station with itself
-                    renderList('station-b-list', document.getElementById('station-b-search').value, state.comparison.stationB);
-                } else {
-                    state.comparison.stationB = station;
-                    renderList('station-b-list', searchVal, station);
-                    // Re-render A list
-                    renderList('station-a-list', document.getElementById('station-a-search').value, state.comparison.stationA);
-                }
-
-                // Check button validation
-                const compareBtn = document.getElementById('start-comparison-btn');
-                if (state.comparison.stationA && state.comparison.stationB && state.comparison.stationA !== state.comparison.stationB) {
-                    compareBtn.disabled = false;
-                } else {
-                    compareBtn.disabled = true;
-                }
-            };
-
-            // Don't show selected station from A as an option in B (prevents self-comparison)
-            if (elementId === 'station-b-list' && station === state.comparison.stationA) {
-                return;
-            }
-            // Don't show selected station from B as an option in A
-            if (elementId === 'station-a-list' && station === state.comparison.stationB) {
-                return;
-            }
-
-            ul.appendChild(li);
-        });
-    };
-
-    // Initialize lists
-    renderList('station-a-list');
-    renderList('station-b-list');
-
-    // Bind searches
-    document.getElementById('station-a-search').oninput = (e) => renderList('station-a-list', e.target.value, state.comparison.stationA);
-    document.getElementById('station-b-search').oninput = (e) => renderList('station-b-list', e.target.value, state.comparison.stationB);
-
-    // Bind Metric change
-    document.querySelectorAll('input[name="compare-metric"]').forEach(radio => {
-        radio.onchange = (e) => {
-            state.comparison.metric = e.target.value;
-            // If chart is already visible, update it live!
-            if (document.getElementById('comparison-chart-section').style.display === 'block') {
-                triggerComparisonChartDrawing();
-            }
-        };
-    });
-
-    // Start Comparison Button Action (with on-demand lazy loading)
-    document.getElementById('start-comparison-btn').onclick = async () => {
-        const compareBtn = document.getElementById('start-comparison-btn');
-        const originalText = compareBtn.textContent;
-        compareBtn.disabled = true;
-        compareBtn.innerHTML = `<i data-lucide="loader-2" class="logo-spin"></i> Loading...`;
-        lucide.createIcons();
-
-        try {
-            // Lazy load station A if not loaded
-            if (!state.loadedData[state.comparison.stationA]) {
-                await loadStationOnDemand(state.comparison.stationA);
-            }
-            // Lazy load station B if not loaded
-            if (!state.loadedData[state.comparison.stationB]) {
-                await loadStationOnDemand(state.comparison.stationB);
-            }
-
-            triggerComparisonChartDrawing();
-            document.getElementById('comparison-chart-section').style.display = 'block';
-        } catch (err) {
-            alert(`Failed to load comparison data: ${err.message}`);
-        } finally {
-            compareBtn.disabled = false;
-            compareBtn.textContent = originalText;
-        }
-    };
-
-    // Close Comparison Chart Panel back to configuration selection
-    document.getElementById('close-comparison-chart-btn').onclick = () => {
-        document.getElementById('comparison-chart-section').style.display = 'none';
-    };
-}
-
-/**
- * Fetches selected comparison datasets and renders the overlay chart
- */
-function triggerComparisonChartDrawing() {
-    const { stationA, stationB, metric } = state.comparison;
-    if (!stationA || !stationB) return;
-
-    const dataA = state.loadedData[stationA];
-    const dataB = state.loadedData[stationB];
-
-    let metricName = metric.toUpperCase();
-    if (metric === 's4') metricName = 'ROTI';
-    else if (metric === 'error') metricName = '3D RMS Position Error';
-    
-    document.getElementById('comparison-chart-title').textContent = `${metricName} Comparison: ${stationA} vs ${stationB}`;
-
-    renderComparisonChart(stationA, stationB, metric, dataA, dataB);
-}
 
 /**
  * Parses RTKLIB .pos files (SPP solutions), averages coordinates, downsamples to 5-min intervals,
@@ -1532,4 +1474,133 @@ async function parseAndStorePOSText(fileName, posText) {
     await saveStationToDB(uppercaseStation, finalDataPoints);
     state.loadedData[uppercaseStation] = finalDataPoints;
 }
+
+/**
+ * Toggles the application theme between light and dark modes.
+ */
+function toggleTheme() {
+    const newTheme = state.theme === 'dark' ? 'light' : 'dark';
+    state.theme = newTheme;
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    // Update theme toggle button icon
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    if (themeToggleBtn) {
+        const icon = themeToggleBtn.querySelector('i');
+        if (icon) {
+            icon.setAttribute('data-lucide', newTheme === 'dark' ? 'sun' : 'moon');
+            lucide.createIcons();
+        }
+    }
+    
+    // Update map tile layer
+    if (typeof setMapTheme === 'function') {
+        setMapTheme(newTheme);
+    }
+    
+    // Update Chart.js themes
+    if (typeof setChartTheme === 'function') {
+        setChartTheme(newTheme);
+    }
+}
+
+/* ==========================================================================
+   4. IPP Data Loading and Rendering Helpers
+   ========================================================================== */
+let playbackInterval = null;
+let isPlaying = false;
+
+/**
+ * Loads the active day's IPP JSON dataset.
+ */
+async function loadIPPDataset() {
+    state.ippData = null;
+    document.getElementById('timeline-container').style.display = 'none';
+
+    if (!state.ippLayerEnabled) return;
+
+    console.log(`Loading IPP JSON data for Day ${state.activeDay}...`);
+    try {
+        const response = await fetch(`data/ipp_doy_${state.activeDay}.json`);
+        if (!response.ok) {
+            console.warn(`IPP data not found for day ${state.activeDay}`);
+            return;
+        }
+        state.ippData = await response.json();
+        console.log(`Successfully loaded IPP data with ${Object.keys(state.ippData).length} epochs.`);
+        
+        // Show timeline controls
+        document.getElementById('timeline-container').style.display = 'block';
+        
+        // Trigger initial draw
+        updateIPPMapVisualization();
+    } catch (err) {
+        console.error("Error loading IPP JSON data:", err);
+    }
+}
+
+/**
+ * Triggers rendering of the active epoch's IPP markers.
+ */
+function updateIPPMapVisualization() {
+    if (!state.ippLayerEnabled || !state.ippData) {
+        if (typeof renderIPPData === 'function') {
+            renderIPPData([]); // Clear
+        }
+        return;
+    }
+
+    const slider = document.getElementById('timeline-slider');
+    const epochVal = parseInt(slider.value);
+    
+    // Map 1-288 epoch index to the actual second timestamp key ("1", "301", "601", etc.)
+    const timestampKey = ((epochVal - 1) * 300 + 1).toString();
+    const epochPoints = state.ippData[timestampKey] || [];
+    
+    // Render on map
+    if (typeof renderIPPData === 'function') {
+        renderIPPData(epochPoints, state.ippConstellation, state.ippShowLines);
+    }
+    
+    // Update digital display
+    const seconds = (epochVal - 1) * 300 + 1;
+    const hour = Math.floor(seconds / 3600);
+    const minute = Math.floor((seconds % 3600) / 60);
+    const formattedTime = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    document.getElementById('timeline-time-val').textContent = formattedTime;
+}
+
+/**
+ * Toggles timeline play/pause playback animation loop.
+ */
+function togglePlayback() {
+    const playBtn = document.getElementById('timeline-play-btn');
+    const slider = document.getElementById('timeline-slider');
+    
+    if (isPlaying) {
+        // Pause
+        clearInterval(playbackInterval);
+        isPlaying = false;
+        playBtn.innerHTML = '<i data-lucide="play"></i>';
+        lucide.createIcons();
+    } else {
+        // Play
+        isPlaying = true;
+        playBtn.innerHTML = '<i data-lucide="pause"></i>';
+        lucide.createIcons();
+        
+        playbackInterval = setInterval(() => {
+            let currentVal = parseInt(slider.value);
+            if (currentVal >= 288) {
+                currentVal = 1; // Wrap around
+            } else {
+                currentVal += 1;
+            }
+            slider.value = currentVal;
+            updateIPPMapVisualization();
+        }, 400); // 400ms tick rate
+    }
+}
+
 

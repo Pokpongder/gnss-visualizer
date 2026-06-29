@@ -10,19 +10,78 @@ const activeCharts = {
     timeseriesError: null,
     s4: null,
     vtec: null,
-    comparison: null,
     expanded: null
 };
 
-// Global styling defaults for Chart.js (Dark Mode theme)
+// Global styling defaults for Chart.js (Dark/Light Mode theme)
 const chartDefaults = {
     textColor: '#9ca3af',
     borderColor: 'rgba(255, 255, 255, 0.06)',
     gridColor: 'rgba(255, 255, 255, 0.05)',
     fontFamily: "'Space Grotesk', sans-serif",
     tooltipBg: 'rgba(14, 22, 38, 0.95)',
-    tooltipBorder: 'rgba(255, 255, 255, 0.1)'
+    tooltipBorder: 'rgba(255, 255, 255, 0.1)',
+    tooltipTitleColor: '#ffffff'
 };
+
+/**
+ * Updates Chart.js defaults and active charts to match the theme.
+ * @param {string} theme - 'dark' or 'light'
+ */
+function setChartTheme(theme) {
+    if (theme === 'light') {
+        chartDefaults.textColor = '#475569';
+        chartDefaults.borderColor = 'rgba(15, 23, 42, 0.06)';
+        chartDefaults.gridColor = 'rgba(15, 23, 42, 0.05)';
+        chartDefaults.tooltipBg = 'rgba(255, 255, 255, 0.95)';
+        chartDefaults.tooltipBorder = 'rgba(15, 23, 42, 0.1)';
+        chartDefaults.tooltipTitleColor = '#0f172a';
+    } else {
+        chartDefaults.textColor = '#9ca3af';
+        chartDefaults.borderColor = 'rgba(255, 255, 255, 0.06)';
+        chartDefaults.gridColor = 'rgba(255, 255, 255, 0.05)';
+        chartDefaults.tooltipBg = 'rgba(14, 22, 38, 0.95)';
+        chartDefaults.tooltipBorder = 'rgba(255, 255, 255, 0.1)';
+        chartDefaults.tooltipTitleColor = '#ffffff';
+    }
+
+    // Update all active chart instances
+    for (const key in activeCharts) {
+        const chart = activeCharts[key];
+        if (!chart) continue;
+
+        // Update scales (grid, ticks, titles)
+        if (chart.options.scales) {
+            for (const scaleKey in chart.options.scales) {
+                const scale = chart.options.scales[scaleKey];
+                if (scale.ticks) {
+                    scale.ticks.color = chartDefaults.textColor;
+                }
+                if (scale.grid) {
+                    scale.grid.color = chartDefaults.gridColor;
+                }
+                if (scale.title) {
+                    scale.title.color = chartDefaults.textColor;
+                }
+            }
+        }
+
+        // Update plugins (legend, tooltip)
+        if (chart.options.plugins) {
+            if (chart.options.plugins.legend && chart.options.plugins.legend.labels) {
+                chart.options.plugins.legend.labels.color = chartDefaults.textColor;
+            }
+            if (chart.options.plugins.tooltip) {
+                chart.options.plugins.tooltip.backgroundColor = chartDefaults.tooltipBg;
+                chart.options.plugins.tooltip.borderColor = chartDefaults.tooltipBorder;
+                chart.options.plugins.tooltip.titleColor = chartDefaults.tooltipTitleColor;
+                chart.options.plugins.tooltip.bodyColor = chartDefaults.textColor;
+            }
+        }
+
+        chart.update();
+    }
+}
 
 /**
  * Initializes or updates all sidebar charts for a selected station.
@@ -145,7 +204,7 @@ function renderScatterErrorChart(data) {
                         backgroundColor: chartDefaults.tooltipBg,
                         borderColor: chartDefaults.tooltipBorder,
                         borderWidth: 1,
-                        titleColor: '#fff',
+                        titleColor: chartDefaults.tooltipTitleColor,
                         bodyColor: chartDefaults.textColor,
                         callbacks: {
                             label: function(context) {
@@ -238,7 +297,7 @@ function renderTimeseriesErrorChart(labels, east, north, up) {
                         backgroundColor: chartDefaults.tooltipBg,
                         borderColor: chartDefaults.tooltipBorder,
                         borderWidth: 1,
-                        titleColor: '#fff',
+                        titleColor: chartDefaults.tooltipTitleColor,
                         bodyColor: chartDefaults.textColor
                     }
                 },
@@ -319,7 +378,7 @@ function renderS4Chart(labels, s4Data) {
                         backgroundColor: chartDefaults.tooltipBg,
                         borderColor: chartDefaults.tooltipBorder,
                         borderWidth: 1,
-                        titleColor: '#fff',
+                        titleColor: chartDefaults.tooltipTitleColor,
                         bodyColor: chartDefaults.textColor
                     }
                 },
@@ -378,7 +437,7 @@ function renderVtecChart(labels, vtecData) {
                         backgroundColor: chartDefaults.tooltipBg,
                         borderColor: chartDefaults.tooltipBorder,
                         borderWidth: 1,
-                        titleColor: '#fff',
+                        titleColor: chartDefaults.tooltipTitleColor,
                         bodyColor: chartDefaults.textColor
                     }
                 },
@@ -398,138 +457,7 @@ function renderVtecChart(labels, vtecData) {
     }
 }
 
-/**
- * Renders the Comparison Chart modal displaying values from two stations overlaid.
- * @param {string} stationAName - Primary station name.
- * @param {string} stationBName - Comparison station name.
- * @param {string} metric - The comparison metric: 'vtec', 's4', or 'error' (3D RMS Error).
- * @param {Array} dataA - Data for station A.
- * @param {Array} dataB - Data for station B.
- */
-function renderComparisonChart(stationAName, stationBName, metric, dataA, dataB) {
-    const ctx = document.getElementById('comparisonChart').getContext('2d');
-    
-    // Sort data sets chronologically
-    const sortedA = [...dataA].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    const sortedB = [...dataB].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    // Align timestamps (use station A's as master labels)
-    const labels = sortedA.map(d => d.timestamp.split(' ')[1] || d.timestamp);
-
-    let metricLabel = '';
-    let yAxisTitle = '';
-    let valExtractor = () => 0;
-
-    if (metric === 'vtec') {
-        metricLabel = 'VTEC (TECU)';
-        yAxisTitle = 'TECU';
-        valExtractor = (d) => d.vtec;
-    } else if (metric === 's4') {
-        metricLabel = 'ROTI (TECU/min)';
-        yAxisTitle = 'ROTI (TECU/min)';
-        valExtractor = (d) => d.s4_index;
-    } else if (metric === 'error') {
-        metricLabel = '3D RMS Positioning Error (m)';
-        yAxisTitle = 'Error (meters)';
-        // 3D error formula: sqrt(dE^2 + dN^2 + dU^2)
-        valExtractor = (d) => Math.sqrt(d.error_east ** 2 + d.error_north ** 2 + d.error_up ** 2);
-    }
-
-    const valuesA = sortedA.map(valExtractor);
-    
-    // Helper to map values B to timestamps aligned with labels A
-    // (In case the arrays are slightly different lengths or missing times)
-    const valuesB = [];
-    sortedA.forEach(itemA => {
-        const matchingB = sortedB.find(itemB => itemB.timestamp === itemA.timestamp);
-        if (matchingB) {
-            valuesB.push(valExtractor(matchingB));
-        } else {
-            valuesB.push(null); // Missing point
-        }
-    });
-
-    const chartData = {
-        labels: labels,
-        datasets: [
-            {
-                label: `${stationAName} (${metricLabel})`,
-                data: valuesA,
-                borderColor: '#3b82f6', // Primary Blue
-                backgroundColor: 'rgba(59, 130, 246, 0.05)',
-                borderWidth: 2,
-                pointRadius: 0,
-                tension: 0.1,
-                fill: false
-            },
-            {
-                label: `${stationBName} (${metricLabel})`,
-                data: valuesB,
-                borderColor: '#8b5cf6', // Purple
-                borderDash: [5, 5],
-                backgroundColor: 'rgba(139, 92, 246, 0.05)',
-                borderWidth: 2,
-                pointRadius: 0,
-                tension: 0.1,
-                fill: false
-            }
-        ]
-    };
-
-    if (activeCharts.comparison) {
-        activeCharts.comparison.data = chartData;
-        activeCharts.comparison.options.scales.y.title.text = yAxisTitle;
-        // Adjust y-axis scale constraints for S4 index
-        if (metric === 's4') {
-            activeCharts.comparison.options.scales.y.min = 0;
-            activeCharts.comparison.options.scales.y.max = 1.0;
-        } else {
-            delete activeCharts.comparison.options.scales.y.min;
-            delete activeCharts.comparison.options.scales.y.max;
-        }
-        activeCharts.comparison.update();
-    } else {
-        activeCharts.comparison = new Chart(ctx, {
-            type: 'line',
-            data: chartData,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: {
-                            color: chartDefaults.textColor,
-                            boxWidth: 20,
-                            font: { family: chartDefaults.fontFamily }
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: chartDefaults.tooltipBg,
-                        borderColor: chartDefaults.tooltipBorder,
-                        borderWidth: 1,
-                        titleColor: '#fff',
-                        bodyColor: chartDefaults.textColor
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: chartDefaults.textColor, maxTicksLimit: 12 }
-                    },
-                    y: {
-                        title: { display: true, text: yAxisTitle, color: chartDefaults.textColor },
-                        grid: { color: chartDefaults.gridColor },
-                        ticks: { color: chartDefaults.textColor },
-                        min: (metric === 's4') ? 0 : undefined,
-                        suggestedMax: (metric === 's4') ? 0.2 : undefined
-                    }
-                }
-            }
-        });
-    }
-}
 
 /**
  * Renders a large-scale expanded chart in the zoom modal
@@ -628,7 +556,7 @@ function renderExpandedChart(chartType, stationName, stationData) {
                         backgroundColor: chartDefaults.tooltipBg,
                         borderColor: chartDefaults.tooltipBorder,
                         borderWidth: 1,
-                        titleColor: '#fff',
+                        titleColor: chartDefaults.tooltipTitleColor,
                         bodyColor: chartDefaults.textColor,
                         callbacks: {
                             label: function(context) {
@@ -713,7 +641,7 @@ function renderExpandedChart(chartType, stationName, stationData) {
                         backgroundColor: chartDefaults.tooltipBg,
                         borderColor: chartDefaults.tooltipBorder,
                         borderWidth: 1,
-                        titleColor: '#fff',
+                        titleColor: chartDefaults.tooltipTitleColor,
                         bodyColor: chartDefaults.textColor
                     }
                 },
@@ -780,7 +708,7 @@ function renderExpandedChart(chartType, stationName, stationData) {
                         backgroundColor: chartDefaults.tooltipBg,
                         borderColor: chartDefaults.tooltipBorder,
                         borderWidth: 1,
-                        titleColor: '#fff',
+                        titleColor: chartDefaults.tooltipTitleColor,
                         bodyColor: chartDefaults.textColor
                     }
                 },
@@ -832,7 +760,7 @@ function renderExpandedChart(chartType, stationName, stationData) {
                         backgroundColor: chartDefaults.tooltipBg,
                         borderColor: chartDefaults.tooltipBorder,
                         borderWidth: 1,
-                        titleColor: '#fff',
+                        titleColor: chartDefaults.tooltipTitleColor,
                         bodyColor: chartDefaults.textColor
                     }
                 },

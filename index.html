@@ -61,10 +61,7 @@
                     <i data-lucide="upload-cloud"></i>
                     <span>Import CSV</span>
                 </button>
-                <button id="compare-btn" class="btn btn-secondary">
-                    <i data-lucide="git-compare"></i>
-                    <span>Compare Stations</span>
-                </button>
+
                 <button id="download-sample-btn" class="btn btn-ghost" title="Download Sample CSV Template" style="display: none;">
                     <i data-lucide="download"></i>
                     <span>Sample CSV</span>
@@ -72,6 +69,9 @@
                 <div class="vertical-divider" style="display: none;"></div>
                 <button id="reset-view-btn" class="btn btn-icon" title="Reset Map View">
                     <i data-lucide="maximize-2"></i>
+                </button>
+                <button id="theme-toggle-btn" class="btn btn-icon" title="Toggle Light/Dark Theme">
+                    <i data-lucide="sun"></i>
                 </button>
             </div>
         </header>
@@ -109,6 +109,58 @@
                                 <span class="label">Total Epochs</span>
                                 <span class="value" id="stat-total-epochs">86,400</span>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- IPP Control Card -->
+                    <div class="overlay-card" style="margin-top: 12px;">
+                        <div class="card-title">IPP Visualization</div>
+                        <div style="margin-bottom: 8px;">
+                            <label class="switch-container">
+                                <span class="label" style="font-size: 0.88rem; color: var(--text-main); font-weight: 500;">Show IPP Layer</span>
+                                <input type="checkbox" id="ipp-layer-toggle" class="switch-input">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div id="ipp-controls-group" style="display: none; border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 10px;">
+                            <div style="margin-bottom: 10px;">
+                                <label class="control-label" style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 4px;">Constellation</label>
+                                <select id="ipp-constellation-select" class="form-select" style="width: 100%;">
+                                    <option value="all">All (GPS & BeiDou)</option>
+                                    <option value="GPS">GPS Only</option>
+                                    <option value="BDS">BeiDou Only</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <label class="switch-container">
+                                    <span class="label" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">Show Connection Lines</span>
+                                    <input type="checkbox" id="ipp-lines-toggle" class="switch-input" checked>
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Floating Timeline Player Overlay -->
+                <div class="map-timeline-overlay" id="timeline-container" style="display: none;">
+                    <div class="timeline-card glass-card">
+                        <button id="timeline-play-btn" class="btn btn-icon btn-primary" title="Play Animation">
+                            <i data-lucide="play"></i>
+                        </button>
+                        <div class="timeline-slider-wrapper">
+                            <input type="range" id="timeline-slider" min="1" max="288" value="1" class="timeline-slider">
+                            <div class="timeline-ticks">
+                                <span>00:00</span>
+                                <span>06:00</span>
+                                <span>12:00</span>
+                                <span>18:00</span>
+                                <span>24:00</span>
+                            </div>
+                        </div>
+                        <div class="timeline-time-display">
+                            <span class="label">Time</span>
+                            <span class="value" id="timeline-time-val">00:00</span>
                         </div>
                     </div>
                 </div>
@@ -372,85 +424,7 @@
         </div>
     </div>
 
-    <!-- Station Comparison Wizard Modal -->
-    <div id="compare-modal" class="modal-overlay">
-        <div class="modal-content glass-card compare-modal-content">
-            <div class="modal-header">
-                <div class="title-with-icon">
-                    <i data-lucide="git-compare" class="text-secondary-color"></i>
-                    <h2>Station Comparison Wizard</h2>
-                </div>
-                <button class="modal-close-btn" id="close-compare-modal">
-                    <i data-lucide="x"></i>
-                </button>
-            </div>
-            <div class="modal-body compare-modal-body">
-                <div class="compare-selectors">
-                    <div class="selector-column">
-                        <label>1. Select Primary Station</label>
-                        <div class="search-box">
-                            <i data-lucide="search"></i>
-                            <input type="text" id="station-a-search" placeholder="Search station...">
-                        </div>
-                        <ul class="station-list" id="station-a-list"></ul>
-                    </div>
 
-                    <div class="selector-column">
-                        <label>2. Select Comparison Station</label>
-                        <div class="search-box">
-                            <i data-lucide="search"></i>
-                            <input type="text" id="station-b-search" placeholder="Search station...">
-                        </div>
-                        <ul class="station-list" id="station-b-list"></ul>
-                    </div>
-
-                    <div class="selector-column config-column">
-                        <label>3. Comparison Metric</label>
-                        <div class="metric-options">
-                            <label class="radio-option">
-                                <input type="radio" name="compare-metric" value="vtec" checked>
-                                <div class="option-card">
-                                    <i data-lucide="activity"></i>
-                                    <span>VTEC</span>
-                                </div>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="compare-metric" value="s4">
-                                <div class="option-card">
-                                    <i data-lucide="zap"></i>
-                                    <span>S4 Index</span>
-                                </div>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="compare-metric" value="error">
-                                <div class="option-card">
-                                    <i data-lucide="target"></i>
-                                    <span>Pos Error (3D RMS)</span>
-                                </div>
-                            </label>
-                        </div>
-                        
-                        <button class="btn btn-primary btn-block" id="start-comparison-btn" disabled>
-                            Generate Comparison
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Comparison Chart Area (Initially Hidden) -->
-                <div class="comparison-chart-section" id="comparison-chart-section" style="display: none;">
-                    <div class="comparison-chart-header">
-                        <h3 id="comparison-chart-title">VTEC Comparison: KMIT6 vs CPN1</h3>
-                        <button class="btn btn-ghost btn-sm" id="close-comparison-chart-btn">
-                            <i data-lucide="arrow-left"></i> Edit Selection
-                        </button>
-                    </div>
-                    <div class="comparison-chart-container">
-                        <canvas id="comparisonChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Expanded Chart Modal -->
     <div id="chart-expanded-modal" class="modal-overlay">
