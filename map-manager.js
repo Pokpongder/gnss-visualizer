@@ -252,3 +252,23 @@ function renderIPPData(ippPoints, constellationFilter = 'all', showLines = true)
     });
 }
 
+/**
+ * Toggles the visibility of station markers on the map.
+ * @param {boolean} visible - If true, displays markers, otherwise removes them.
+ */
+function toggleStationMarkersVisibility(visible) {
+    if (!leafletMap) return;
+    Object.values(mapMarkers).forEach(marker => {
+        if (visible) {
+            if (!leafletMap.hasLayer(marker)) {
+                marker.addTo(leafletMap);
+            }
+        } else {
+            if (leafletMap.hasLayer(marker)) {
+                leafletMap.removeLayer(marker);
+            }
+        }
+    });
+}
+
+

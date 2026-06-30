@@ -582,6 +582,16 @@ function registerDOMEvents() {
     const timelineSlider = document.getElementById('timeline-slider');
     const playBtn = document.getElementById('timeline-play-btn');
 
+    // Toggle Station Layer visibility
+    const stationLayerToggle = document.getElementById('station-layer-toggle');
+    if (stationLayerToggle) {
+        stationLayerToggle.onchange = (e) => {
+            if (typeof toggleStationMarkersVisibility === 'function') {
+                toggleStationMarkersVisibility(e.target.checked);
+            }
+        };
+    }
+
     // Toggle IPP Layer visibility
     if (ippLayerToggle) {
         ippLayerToggle.onchange = async (e) => {
