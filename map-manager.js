@@ -201,11 +201,11 @@ function renderIPPData(ippPoints, constellationFilter = 'all', showLines = true)
         // VTEC values color mapping (low: green, medium: yellow, high: red, extreme: pink/magenta)
         let color = '#3b82f6'; // Default blue
         let val = pt.v;
-        if (val < 10) {
+        if (val < 15) {
             color = '#10b981'; // Green
-        } else if (val < 25) {
+        } else if (val < 40) {
             color = '#f59e0b'; // Yellow/Orange
-        } else if (val < 45) {
+        } else if (val < 70) {
             color = '#ef4444'; // Red
         } else {
             color = '#ec4899'; // Pink/Magenta
