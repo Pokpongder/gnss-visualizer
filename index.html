@@ -131,6 +131,13 @@
                         </div>
                         <div id="ipp-controls-group" style="display: none; border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 10px;">
                             <div style="margin-bottom: 10px;">
+                                <label class="control-label" style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 4px;">Metric</label>
+                                <select id="ipp-metric-select" class="form-select" style="width: 100%;">
+                                    <option value="vtec">VTEC (TECU)</option>
+                                    <option value="roti">ROTI (TECU/min)</option>
+                                </select>
+                            </div>
+                            <div style="margin-bottom: 10px;">
                                 <label class="control-label" style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 4px;">Constellation</label>
                                 <select id="ipp-constellation-select" class="form-select" style="width: 100%;">
                                     <option value="all">All (GPS & BeiDou)</option>
@@ -146,17 +153,17 @@
                                 </label>
                             </div>
                             
-                             <!-- VTEC Color Legend -->
+                             <!-- VTEC/ROTI Color Legend -->
                             <div style="margin-top: 14px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
-                                <label style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px; letter-spacing: 0.5px;">VTEC Intensity (TECU)</label>
+                                <label id="legend-metric-title" style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px; letter-spacing: 0.5px;">VTEC Intensity (TECU)</label>
                                 <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px; padding: 0 2px;">
-                                    <span>0</span>
-                                    <span>15</span>
-                                    <span>40</span>
-                                    <span>70</span>
-                                    <span>100+</span>
+                                    <span id="legend-tick-0">0</span>
+                                    <span id="legend-tick-1">15</span>
+                                    <span id="legend-tick-2">40</span>
+                                    <span id="legend-tick-3">70</span>
+                                    <span id="legend-tick-4">100+</span>
                                 </div>
-                                <div style="height: 6px; border-radius: 99px; background: linear-gradient(to right, #10b981 0%, #10b981 15%, #f59e0b 15%, #f59e0b 40%, #ef4444 40%, #ef4444 70%, #ec4899 70%, #ec4899 100%); width: 100%;"></div>
+                                <div id="legend-color-bar" style="height: 6px; border-radius: 99px; background: linear-gradient(to right, #10b981 0%, #10b981 15%, #f59e0b 15%, #f59e0b 40%, #ef4444 40%, #ef4444 70%, #ec4899 70%, #ec4899 100%); width: 100%;"></div>
                             </div>
                         </div>
                     </div>

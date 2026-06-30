@@ -183,11 +183,12 @@ function focusOnStation(stationName) {
 
 /**
  * Renders Ionospheric Pierce Points (IPPs) and connection lines on the map.
- * @param {Array<Object>} ippPoints - Array of IPP objects: { st, sat, lat, lon, v }
+ * @param {Array<Object>} ippPoints - Array of IPP objects: { st, sat, lat, lon, v, r }
  * @param {string} constellationFilter - 'all', 'GPS', or 'BDS'
  * @param {boolean} showLines - If true, draws connection lines
+ * @param {string} metricType - 'vtec' or 'roti'
  */
-function renderIPPData(ippPoints, constellationFilter = 'all', showLines = true) {
+function renderIPPData(ippPoints, constellationFilter = 'all', showLines = true, metricType = 'vtec') {
     if (!ippLayerGroup) return;
     ippLayerGroup.clearLayers();
 
@@ -198,17 +199,32 @@ function renderIPPData(ippPoints, constellationFilter = 'all', showLines = true)
         if (constellationFilter === 'GPS' && !pt.sat.startsWith('G')) return;
         if (constellationFilter === 'BDS' && !pt.sat.startsWith('C')) return;
 
-        // VTEC values color mapping (low: green, medium: yellow, high: red, extreme: pink/magenta)
+        // Metric and Color Coding selection
+        let val = metricType === 'roti' ? pt.r : pt.v;
         let color = '#3b82f6'; // Default blue
-        let val = pt.v;
-        if (val < 15) {
-            color = '#10b981'; // Green
-        } else if (val < 40) {
-            color = '#f59e0b'; // Yellow/Orange
-        } else if (val < 70) {
-            color = '#ef4444'; // Red
+
+        if (metricType === 'roti') {
+            // ROTI thresholds: low < 0.2, medium < 0.5, high < 1.0, extreme >= 1.0
+            if (val < 0.2) {
+                color = '#10b981'; // Green
+            } else if (val < 0.5) {
+                color = '#f59e0b'; // Yellow/Orange
+            } else if (val < 1.0) {
+                color = '#ef4444'; // Red
+            } else {
+                color = '#ec4899'; // Pink/Magenta
+            }
         } else {
-            color = '#ec4899'; // Pink/Magenta
+            // VTEC thresholds: low < 15, medium < 40, high < 70, extreme >= 70
+            if (val < 15) {
+                color = '#10b981'; // Green
+            } else if (val < 40) {
+                color = '#f59e0b'; // Yellow/Orange
+            } else if (val < 70) {
+                color = '#ef4444'; // Red
+            } else {
+                color = '#ec4899'; // Pink/Magenta
+            }
         }
 
         // Draw Circle at IPP
@@ -222,10 +238,14 @@ function renderIPPData(ippPoints, constellationFilter = 'all', showLines = true)
         });
 
         // Tooltip detail
+        const valueDisplay = metricType === 'roti' 
+            ? `<strong>ROTI:</strong> ${val.toFixed(3)} TECU/min`
+            : `<strong>VTEC:</strong> ${val.toFixed(2)} TECU`;
+
         const tooltipContent = `
             <div style="font-family: 'Outfit', sans-serif; font-size: 0.8rem; line-height: 1.3;">
                 <strong>Sat:</strong> ${pt.sat}<br>
-                <strong>VTEC:</strong> ${pt.v.toFixed(2)} TECU<br>
+                ${valueDisplay}<br>
                 <strong>IPP:</strong> ${pt.lat.toFixed(2)}°, ${pt.lon.toFixed(2)}°<br>
                 <strong>Station:</strong> ${pt.st}
             </div>

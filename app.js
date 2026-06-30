@@ -17,7 +17,8 @@ const state = {
     ippData: null,        // Loaded day's IPP data
     ippLayerEnabled: false,
     ippShowLines: true,
-    ippConstellation: 'all'
+    ippConstellation: 'all',
+    ippMetric: 'vtec'
 };
 
 // Auto-detection Regex Rules for CSV Headers
@@ -575,6 +576,7 @@ function registerDOMEvents() {
     // IPP Layer Toggles & Filters
     const ippLayerToggle = document.getElementById('ipp-layer-toggle');
     const ippControlsGroup = document.getElementById('ipp-controls-group');
+    const ippMetricSelect = document.getElementById('ipp-metric-select');
     const ippConstellationSelect = document.getElementById('ipp-constellation-select');
     const ippLinesToggle = document.getElementById('ipp-lines-toggle');
 
@@ -589,6 +591,41 @@ function registerDOMEvents() {
             if (typeof toggleStationMarkersVisibility === 'function') {
                 toggleStationMarkersVisibility(e.target.checked);
             }
+        };
+    }
+
+    // Metric Selector (VTEC vs ROTI)
+    if (ippMetricSelect) {
+        ippMetricSelect.onchange = (e) => {
+            const metric = e.target.value;
+            state.ippMetric = metric;
+            
+            const legendTitle = document.getElementById('legend-metric-title');
+            const legendBar = document.getElementById('legend-color-bar');
+            
+            if (metric === 'roti') {
+                legendTitle.textContent = "ROTI Intensity (TECU/min)";
+                document.getElementById('legend-tick-0').textContent = "0";
+                document.getElementById('legend-tick-1').textContent = "0.2";
+                document.getElementById('legend-tick-2').textContent = "0.5";
+                document.getElementById('legend-tick-3').textContent = "1.0";
+                document.getElementById('legend-tick-4').textContent = "2.0+";
+                
+                // ROTI gradient: 10% (0.2), 25% (0.5), 50% (1.0) on 0-2.0 scale
+                legendBar.style.background = "linear-gradient(to right, #10b981 0%, #10b981 10%, #f59e0b 10%, #f59e0b 25%, #ef4444 25%, #ef4444 50%, #ec4899 50%, #ec4899 100%)";
+            } else {
+                legendTitle.textContent = "VTEC Intensity (TECU)";
+                document.getElementById('legend-tick-0').textContent = "0";
+                document.getElementById('legend-tick-1').textContent = "15";
+                document.getElementById('legend-tick-2').textContent = "40";
+                document.getElementById('legend-tick-3').textContent = "70";
+                document.getElementById('legend-tick-4').textContent = "100+";
+                
+                // VTEC gradient: 15% (15), 40% (40), 70% (70) on 0-100 scale
+                legendBar.style.background = "linear-gradient(to right, #10b981 0%, #10b981 15%, #f59e0b 15%, #f59e0b 40%, #ef4444 40%, #ef4444 70%, #ec4899 70%, #ec4899 100%)";
+            }
+            
+            updateIPPMapVisualization();
         };
     }
 
@@ -1570,7 +1607,7 @@ function updateIPPMapVisualization() {
     
     // Render on map
     if (typeof renderIPPData === 'function') {
-        renderIPPData(epochPoints, state.ippConstellation, state.ippShowLines);
+        renderIPPData(epochPoints, state.ippConstellation, state.ippShowLines, state.ippMetric);
     }
     
     // Update digital display
