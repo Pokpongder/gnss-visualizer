@@ -84,8 +84,8 @@ function createStationMarkerIcon(status = 'inactive') {
     let animateClass = '';
 
     if (status === 'active') {
-        dotColor = '#10b981'; // Neon Green
-        shadowGlow = 'rgba(16, 185, 129, 0.6)';
+        dotColor = '#3b82f6'; // Bright Neon Blue
+        shadowGlow = 'rgba(59, 130, 246, 0.6)';
         animateClass = 'pulse-animation'; // Animation defined in CSS or via box-shadow pulse
     }
 
