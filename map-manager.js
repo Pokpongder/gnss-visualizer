@@ -204,11 +204,13 @@ function renderIPPData(ippPoints, constellationFilter = 'all', showLines = true,
         let color = '#3b82f6'; // Default blue
 
         if (metricType === 'roti') {
-            // ROTI thresholds: low < 0.2, medium < 0.5, high < 1.0, extreme >= 1.0
-            if (val < 0.2) {
+            // ROTI thresholds: Green < 0.1, Yellow < 0.25, Orange < 0.5, Red < 1.0, Pink >= 1.0
+            if (val < 0.1) {
                 color = '#10b981'; // Green
+            } else if (val < 0.25) {
+                color = '#f59e0b'; // Yellow
             } else if (val < 0.5) {
-                color = '#f59e0b'; // Yellow/Orange
+                color = '#f97316'; // Orange
             } else if (val < 1.0) {
                 color = '#ef4444'; // Red
             } else {

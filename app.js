@@ -606,13 +606,13 @@ function registerDOMEvents() {
             if (metric === 'roti') {
                 legendTitle.textContent = "ROTI Intensity (TECU/min)";
                 document.getElementById('legend-tick-0').textContent = "0";
-                document.getElementById('legend-tick-1').textContent = "0.2";
-                document.getElementById('legend-tick-2').textContent = "0.5";
-                document.getElementById('legend-tick-3').textContent = "1.0";
-                document.getElementById('legend-tick-4').textContent = "2.0+";
+                document.getElementById('legend-tick-1').textContent = "0.1";
+                document.getElementById('legend-tick-2').textContent = "0.25";
+                document.getElementById('legend-tick-3').textContent = "0.5";
+                document.getElementById('legend-tick-4').textContent = "1.0+";
                 
-                // ROTI gradient: 10% (0.2), 25% (0.5), 50% (1.0) on 0-2.0 scale
-                legendBar.style.background = "linear-gradient(to right, #10b981 0%, #10b981 10%, #f59e0b 10%, #f59e0b 25%, #ef4444 25%, #ef4444 50%, #ec4899 50%, #ec4899 100%)";
+                // ROTI gradient blocks aligned to boundaries: 0-0.1 (Green), 0.1-0.25 (Yellow), 0.25-0.5 (Orange), 0.5-1.0 (Red), 1.0+ (Pink)
+                legendBar.style.background = "linear-gradient(to right, #10b981 0%, #10b981 25%, #f59e0b 25%, #f59e0b 50%, #f97316 50%, #f97316 75%, #ef4444 75%, #ef4444 90%, #ec4899 90%, #ec4899 100%)";
             } else {
                 legendTitle.textContent = "VTEC Intensity (TECU)";
                 document.getElementById('legend-tick-0').textContent = "0";
@@ -621,8 +621,8 @@ function registerDOMEvents() {
                 document.getElementById('legend-tick-3').textContent = "70";
                 document.getElementById('legend-tick-4').textContent = "100+";
                 
-                // VTEC gradient: 15% (15), 40% (40), 70% (70) on 0-100 scale
-                legendBar.style.background = "linear-gradient(to right, #10b981 0%, #10b981 15%, #f59e0b 15%, #f59e0b 40%, #ef4444 40%, #ef4444 70%, #ec4899 70%, #ec4899 100%)";
+                // VTEC gradient blocks aligned to boundaries: 0-15 (Green), 15-40 (Yellow), 40-70 (Red), 70-100+ (Pink)
+                legendBar.style.background = "linear-gradient(to right, #10b981 0%, #10b981 25%, #f59e0b 25%, #f59e0b 50%, #ef4444 50%, #ef4444 75%, #ec4899 75%, #ec4899 100%)";
             }
             
             updateIPPMapVisualization();
