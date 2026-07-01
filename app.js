@@ -18,7 +18,8 @@ const state = {
     ippLayerEnabled: false,
     ippShowLines: true,
     ippConstellation: 'all',
-    ippMetric: 'vtec'
+    ippMetric: 'vtec',
+    playbackSpeed: 400   // Animation tick speed in ms (400ms = 1x)
 };
 
 // Auto-detection Regex Rules for CSV Headers
@@ -681,6 +682,37 @@ function registerDOMEvents() {
     if (playBtn) {
         playBtn.onclick = () => {
             togglePlayback();
+        };
+    }
+
+    // Timeline Speed Button
+    const speedBtn = document.getElementById('timeline-speed-btn');
+    if (speedBtn) {
+        speedBtn.onclick = () => {
+            // Speed options: 1x (400ms), 2x (200ms), 4x (100ms), 0.5x (800ms)
+            const speeds = [400, 200, 100, 800];
+            const speedLabels = ['1x', '2x', '4x', '0.5x'];
+            
+            const currentIdx = speeds.indexOf(state.playbackSpeed);
+            const nextIdx = (currentIdx + 1) % speeds.length;
+            
+            state.playbackSpeed = speeds[nextIdx];
+            speedBtn.textContent = speedLabels[nextIdx];
+            
+            // If playing, restart the interval on-the-fly
+            if (isPlaying) {
+                clearInterval(playbackInterval);
+                playbackInterval = setInterval(() => {
+                    let currentVal = parseInt(timelineSlider.value);
+                    if (currentVal >= 288) {
+                        currentVal = 1;
+                    } else {
+                        currentVal += 1;
+                    }
+                    timelineSlider.value = currentVal;
+                    updateIPPMapVisualization();
+                }, state.playbackSpeed);
+            }
         };
     }
 }
@@ -1646,7 +1678,7 @@ function togglePlayback() {
             }
             slider.value = currentVal;
             updateIPPMapVisualization();
-        }, 400); // 400ms tick rate
+        }, state.playbackSpeed);
     }
 }
 
