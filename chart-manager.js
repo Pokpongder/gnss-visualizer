@@ -465,13 +465,38 @@ function renderVtecChart(labels, vtecData) {
 function renderExpandedChart(chartType, stationName, stationData) {
     const ctx = document.getElementById('expandedChartCanvas').getContext('2d');
     
+    // Save original chartDefaults
+    const origTextColor = chartDefaults.textColor;
+    const origGridColor = chartDefaults.gridColor;
+    const origBorderColor = chartDefaults.borderColor;
+    const origTooltipBg = chartDefaults.tooltipBg;
+    const origTooltipBorder = chartDefaults.tooltipBorder;
+    const origTooltipTitleColor = chartDefaults.tooltipTitleColor;
+
+    // Force clean light theme styling for expanded chart (since its modal background is forced white)
+    chartDefaults.textColor = '#334155';
+    chartDefaults.gridColor = 'rgba(15, 23, 42, 0.06)';
+    chartDefaults.borderColor = 'rgba(15, 23, 42, 0.08)';
+    chartDefaults.tooltipBg = 'rgba(255, 255, 255, 0.98)';
+    chartDefaults.tooltipBorder = 'rgba(15, 23, 42, 0.1)';
+    chartDefaults.tooltipTitleColor = '#0f172a';
+    
     // Destroy previous expanded chart instance if exists
     if (activeCharts.expanded) {
         activeCharts.expanded.destroy();
         activeCharts.expanded = null;
     }
     
-    if (!stationData || stationData.length === 0) return;
+    if (!stationData || stationData.length === 0) {
+        // Restore defaults if we return early
+        chartDefaults.textColor = origTextColor;
+        chartDefaults.gridColor = origGridColor;
+        chartDefaults.borderColor = origBorderColor;
+        chartDefaults.tooltipBg = origTooltipBg;
+        chartDefaults.tooltipBorder = origTooltipBorder;
+        chartDefaults.tooltipTitleColor = origTooltipTitleColor;
+        return;
+    }
     const sortedData = [...stationData].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     const timestamps = sortedData.map(d => d.timestamp.split(' ')[1] || d.timestamp);
     
@@ -781,4 +806,12 @@ function renderExpandedChart(chartType, stationName, stationData) {
 
     activeCharts.expanded = new Chart(ctx, config);
     lucide.createIcons();
+
+    // Restore original chartDefaults variables
+    chartDefaults.textColor = origTextColor;
+    chartDefaults.gridColor = origGridColor;
+    chartDefaults.borderColor = origBorderColor;
+    chartDefaults.tooltipBg = origTooltipBg;
+    chartDefaults.tooltipBorder = origTooltipBorder;
+    chartDefaults.tooltipTitleColor = origTooltipTitleColor;
 }
